@@ -1,4 +1,4 @@
-name: Build Flutter APK
+name: Build Sahayak AI APK
 
 on:
   push:
@@ -26,6 +26,11 @@ jobs:
           flutter-version: '3.19.x'
           channel: 'stable'
 
+      - name: Create Fresh Flutter Project Structure
+        run: |
+          # यह कमांड गिटहब के क्लाउड पर ही पूरी सही एंड्रॉइड/जीआरएडीएल फाइलें खुद जनरेट कर देगा
+          flutter create . --org com.sahayak.ai --project-name sahayak_ai --platforms=android
+
       - name: Get Flutter Dependencies
         run: flutter pub get
 
@@ -35,5 +40,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
+          name: sahayak-ai-apk
           path: build/app/outputs/flutter-apk/app-release.apk
