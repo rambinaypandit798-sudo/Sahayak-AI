@@ -43,7 +43,7 @@ class OnboardingScreen extends StatelessWidget {
             children: [
               const Text('Sahayak AI', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8))),
               const SizedBox(height: 8),
-              const Text('Control\nEverything in\nOne Place', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w300, color: Colors.white, height: 1.2)),
+              const Text('Smart Citizen\nAssistant for\nEvery Problem', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w300, color: Colors.white, height: 1.2)),
               const Spacer(),
               Container(
                 height: 220,
@@ -60,7 +60,7 @@ class OnboardingScreen extends StatelessWidget {
                     SizedBox(height: 10),
                     Icon(Icons.camera_alt, size: 35, color: Color(0xFF34D399)),
                     SizedBox(height: 12),
-                    Text('Real Gemini Vision & Voice Engine', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                    Text('Gemini Vision & Voice Engine (Android 11-16)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
                   ],
                 ),
               ),
@@ -102,12 +102,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
 
   void _handleLogin() {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('कृपया ईमेल और पासवर्ड दर्ज करें!')),
-      );
-      return;
-    }
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => const MainDashboard()),
@@ -218,48 +212,60 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   void _initTts() async {
-    await _flutterTts.setLanguage("hi-IN");
-    await _flutterTts.setSpeechRate(0.5);
+    try {
+      await _flutterTts.setLanguage("hi-IN");
+      await _flutterTts.setSpeechRate(0.5);
+    } catch (_) {}
   }
 
   void _listen() async {
-    if (!_isListening) {
-      bool available = await _speech.initialize();
-      if (available) {
-        setState(() => _isListening = true);
-        _speech.listen(
-          onResult: (val) => setState(() {
-            _statusText = val.recognizedWords;
-            if (val.hasConfidenceRating && val.confidence > 0) {
-              _sendTextToGemini(_statusText);
-            }
-          }),
+    try {
+      if (!_isListening) {
+        bool available = await _speech.initialize(
+          onStatus: (val) => print('onStatus: $val'),
+          onError: (val) => print('onError: $val'),
         );
+        if (available) {
+          setState(() => _isListening = true);
+          _speech.listen(
+            onResult: (val) => setState(() {
+              _statusText = val.recognizedWords;
+              if (val.hasConfidenceRating && val.confidence > 0) {
+                _sendTextToGemini(_statusText);
+              }
+            }),
+          );
+        }
+      } else {
+        setState(() => _isListening = false);
+        _speech.stop();
       }
-    } else {
-      setState(() => _isListening = false);
-      _speech.stop();
+    } catch (e) {
+      setState(() {
+        _isListening = false;
+        _statusText = "माइक्रोफोन अनुमति की आवश्यकता है";
+      });
     }
   }
 
   Future<void> _pickImageAndAnalyze(ImageSource source) async {
-    final XFile? image = await _picker.pickImage(source: source, imageQuality: 80);
-    if (image == null) return;
-
-    setState(() {
-      _selectedImage = File(image.path);
-      _isLoading = true;
-      _aiResponse = "📷 फोटो अपलोड हो रही है और Gemini 1.5 Flash Vision द्वारा जांची जा रही है...";
-    });
-
     try {
+      final XFile? image = await _picker.pickImage(source: source, imageQuality: 80);
+      if (image == null) return;
+
+      setState(() {
+        _selectedImage = File(image.path);
+        _isLoading = true;
+        _aiResponse = "📷 फोटो अपलोड हो रही है और Gemini 1.5 Flash Vision द्वारा जांची जा रही है...";
+      });
+
       final model = GenerativeModel(
         model: 'gemini-1.5-flash',
         apiKey: _geminiApiKey.isNotEmpty ? _geminiApiKey : "YOUR_API_KEY",
       );
 
       final imageBytes = await _selectedImage!.readAsBytes();
-      final prompt = TextPart("इस तस्वीर में दिखाई गई नागरिक समस्या (जैसे टूटी सड़क, कचरा, गंदा पानी आदि) की पहचान करें और बताएं कि इसके समाधान के लिए किस सरकारी विभाग से संपर्क करना चाहिए।");
+      final prompt = TextPart("आप 'Sahayak AI' हैं। इस तस्वीर में दिखाई गई नागरिक समस्या (जैसे टूटी सड़क, कचरा, गड्ढा, जलभराव आदि) की पहचान करें और बताएं कि इसके समाधान के लिए किस सरकारी विभाग से संपर्क करना चाहिए और क्या कदम उठाने चाहिए। हिंदी में उत्तर दें।");
       final imagePart = DataPart('image/jpeg', imageBytes);
 
       final response = await model.generateContent([
@@ -271,11 +277,13 @@ class _MainDashboardState extends State<MainDashboard> {
         _aiResponse = response.text ?? "विश्लेषण पूर्ण हुआ।";
       });
 
-      await _flutterTts.speak(_aiResponse);
+      try {
+        await _flutterTts.speak(_aiResponse);
+      } catch (_) {}
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _aiResponse = "त्रुटि: $e";
+        _aiResponse = "त्रुटि: कृपया इंटरनेट कनेक्शन या API Key जाँचें। ($e)";
       });
     }
   }
@@ -292,14 +300,16 @@ class _MainDashboardState extends State<MainDashboard> {
         apiKey: _geminiApiKey.isNotEmpty ? _geminiApiKey : "YOUR_API_KEY",
       );
 
-      final response = await model.generateContent([Content.text("आप एक सरकारी नागरिक सहायक (Sahayak AI) हैं। उपयोगकर्ता की इस समस्या का सटीक समाधान और संबंधित विभाग का नाम बताएं: $prompt")]);
+      final response = await model.generateContent([Content.text("आप एक सरकारी नागरिक सहायक (Sahayak AI) हैं। उपयोगकर्ता की इस समस्या का सटीक समाधान और संबंधित विभाग का नाम हिंदी में बताएं: $prompt")]);
 
       setState(() {
         _isLoading = false;
         _aiResponse = response.text ?? "उत्तर नहीं मिला।";
       });
 
-      await _flutterTts.speak(_aiResponse);
+      try {
+        await _flutterTts.speak(_aiResponse);
+      } catch (_) {}
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -312,7 +322,7 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sahayak AI - Live Assistant'),
+        title: const Text('Sahayak AI - Live Dashboard'),
         backgroundColor: const Color(0xFF1E293B),
       ),
       body: Padding(
