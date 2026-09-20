@@ -28,9 +28,6 @@ class SahayakAIApp extends StatelessWidget {
   }
 }
 
-// ==============================================================================
-// 1. ONBOARDING SCREEN
-// ==============================================================================
 class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({Key? key}) : super(key: key);
 
@@ -63,7 +60,7 @@ class OnboardingScreen extends StatelessWidget {
                     SizedBox(height: 10),
                     Icon(Icons.camera_alt, size: 35, color: Color(0xFF34D399)),
                     SizedBox(height: 12),
-                    Text('Voice & Vision AI Engine', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                    Text('Real Gemini Vision & Voice Engine', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
                   ],
                 ),
               ),
@@ -93,9 +90,6 @@ class OnboardingScreen extends StatelessWidget {
   }
 }
 
-// ==============================================================================
-// 2. WORKING LOGIN SCREEN
-// ==============================================================================
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
 
@@ -114,7 +108,6 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       return;
     }
-
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => const MainDashboard()),
@@ -196,9 +189,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ==============================================================================
-// 3. FULLY ACTIVATED DASHBOARD (Voice + Vision + Gemini API)
-// ==============================================================================
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
 
@@ -232,7 +222,6 @@ class _MainDashboardState extends State<MainDashboard> {
     await _flutterTts.setSpeechRate(0.5);
   }
 
-  // 🎤 स्पीच टू टेक्स्ट
   void _listen() async {
     if (!_isListening) {
       bool available = await _speech.initialize();
@@ -253,7 +242,6 @@ class _MainDashboardState extends State<MainDashboard> {
     }
   }
 
-  // 📷 गैलरी या कैमरे से फोटो चुनना और Gemini Vision को भेजना
   Future<void> _pickImageAndAnalyze(ImageSource source) async {
     final XFile? image = await _picker.pickImage(source: source, imageQuality: 80);
     if (image == null) return;
@@ -261,7 +249,7 @@ class _MainDashboardState extends State<MainDashboard> {
     setState(() {
       _selectedImage = File(image.path);
       _isLoading = true;
-      _aiResponse = "📷 फोटो अपलोड हो रही है और Gemini Vision AI द्वारा जांची जा रही है...";
+      _aiResponse = "📷 फोटो अपलोड हो रही है और Gemini 1.5 Flash Vision द्वारा जांची जा रही है...";
     });
 
     try {
@@ -292,11 +280,10 @@ class _MainDashboardState extends State<MainDashboard> {
     }
   }
 
-  // 🤖 सिर्फ टेक्स्ट भेजने के लिए
   Future<void> _sendTextToGemini(String prompt) async {
     setState(() {
       _isLoading = true;
-      _aiResponse = "AI सोच रहा है...";
+      _aiResponse = "Gemini AI सोच रहा है...";
     });
 
     try {
@@ -305,7 +292,7 @@ class _MainDashboardState extends State<MainDashboard> {
         apiKey: _geminiApiKey.isNotEmpty ? _geminiApiKey : "YOUR_API_KEY",
       );
 
-      final response = await model.generateContent([Content.text(prompt)]);
+      final response = await model.generateContent([Content.text("आप एक सरकारी नागरिक सहायक (Sahayak AI) हैं। उपयोगकर्ता की इस समस्या का सटीक समाधान और संबंधित विभाग का नाम बताएं: $prompt")]);
 
       setState(() {
         _isLoading = false;
@@ -325,14 +312,13 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sahayak AI - Voice & Vision'),
+        title: const Text('Sahayak AI - Live Assistant'),
         backgroundColor: const Color(0xFF1E293B),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // माइक बटन
             Center(
               child: GestureDetector(
                 onTap: _listen,
@@ -351,8 +337,6 @@ class _MainDashboardState extends State<MainDashboard> {
             const SizedBox(height: 8),
             Text(_isListening ? "सुन रहा हूँ..." : "बोलने के लिए माइक टैप करें", style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
             const SizedBox(height: 15),
-
-            // फोटो अपलोड करने के बटन्स (कैमरा और गैलरी)
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -372,8 +356,6 @@ class _MainDashboardState extends State<MainDashboard> {
               ],
             ),
             const SizedBox(height: 15),
-
-            // चयनित फोटो का प्रीव्यू दिखाने के लिए
             if (_selectedImage != null)
               Container(
                 height: 100,
@@ -384,8 +366,6 @@ class _MainDashboardState extends State<MainDashboard> {
                   image: DecorationImage(image: FileImage(_selectedImage!), fit: BoxFit.cover),
                 ),
               ),
-
-            // स्टेटस टेक्स्ट
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(10),
@@ -393,8 +373,6 @@ class _MainDashboardState extends State<MainDashboard> {
               child: Text("इनपुट: $_statusText", style: const TextStyle(fontSize: 13, color: Colors.amber)),
             ),
             const SizedBox(height: 10),
-
-            // AI रिस्पॉन्स बॉक्स
             Expanded(
               child: Container(
                 width: double.infinity,
