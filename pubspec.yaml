@@ -1,5 +1,5 @@
 name: sahayak_ai
-description: "Sahayak AI - Universal Smart Assistant for Civic Assistance"
+description: "Sahayak AI - Smart Citizen Assistant"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -13,6 +13,7 @@ dependencies:
   speech_to_text: ^6.6.1
   flutter_tts: ^3.8.5
   image_picker: ^1.1.2
+  shared_preferences: ^2.2.3
 
 dev_dependencies:
   flutter_test:
