@@ -1,13 +1,16 @@
 // ============================================================================
-//  Sahayak AI — Smart Citizen Assistant with Built-in TTS Voice Reader
+//  Sahayak AI — Complete Production App (Camera, Gallery, Gemini AI & TTS)
 // ============================================================================
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 
 class AppColors {
   AppColors._();
@@ -65,8 +68,8 @@ class Complaint {
 }
 
 class LocalStore {
-  static const String _chatKey = 'sahayak_chat_v3';
-  static const String _complaintsKey = 'sahayak_complaints_v3';
+  static const String _chatKey = 'sahayak_chat_v7';
+  static const String _complaintsKey = 'sahayak_complaints_v7';
 
   static Future<List<ChatMessage>> loadChat() async {
     try {
@@ -108,19 +111,42 @@ class LocalStore {
 }
 
 class GeminiService {
-  static Future<String> getAiResponse(String prompt) async {
+  // 🔑 अपनी असली Gemini API Key यहाँ डालें
+  static const String apiKey = "YOUR_GEMINI_API_KEY";
+
+  static Future<String> getGeminiResponse(String userPrompt, {String? imagePath}) async {
+    if (apiKey == "YOUR_GEMINI_API_KEY" || apiKey.isEmpty) {
+      return "नमस्ते! मैं Sahayak AI हूँ। आप अपनी समस्या पूछ सकते हैं या फोटो अपलोड कर सकते हैं। (नोट: कोड में API Key दर्ज करें)।";
+    }
+
     try {
-      String p = prompt.toLowerCase();
-      if (p.contains('bca') || p.contains('इग्नू')) {
-        return "आप इंदिरा गांधी राष्ट्रीय मुक्त विश्वविद्यालय से बीसीए (BCA) की पढ़ाई कर रहे हैं। अपनी पढ़ाई और कोडिंग पर पूरा ध्यान दें!";
-      } else if (p.contains('सड़क') || p.contains('गड्ढा') || p.contains('pothole')) {
-        return "यह सड़क एवं गड्ढों की समस्या है, जो लोक निर्माण विभाग (PWD) के अंतर्गत आती है। कृपया अपना वार्ड नंबर या लोकेशन बताएं।";
-      } else if (p.contains('कचरा') || p.contains('garbage')) {
-        return "यह कचरा और स्वच्छता से जुड़ी समस्या है, जो नगर निगम स्वच्छता विभाग के अंतर्गत आती है। अपना क्षेत्र बताएं।";
+      final model = GenerativeModel(
+        model: 'gemini-1.5-flash',
+        apiKey: apiKey,
+        systemInstruction: Content.text(
+          "आप 'Sahayak AI' हैं—एक बुद्धिमान नागरिक और छात्र सहायक (Civic & Student Assistant)। "
+          "लोगों की नागरिक समस्याओं (सड़क, पानी, कचरा) और पढ़ाई/शैक्षणिक सवालों में मदद करें। "
+          "हिंदी में उत्तर दें।"
+        ),
+      );
+
+      if (imagePath != null && File(imagePath).existsSync()) {
+        final imageBytes = await File(imagePath).readAsBytes();
+        final prompt = TextPart(userPrompt.isEmpty ? "इस फोटो को देखकर बताएं कि यह किस प्रकार की समस्या है।" : userPrompt);
+        final imagePart = DataPart('image/jpeg', imageBytes);
+
+        final response = await model.generateContent([
+          Content.multi([prompt, imagePart])
+        ]);
+        return response.text ?? "छवि का विश्लेषण करने में असमर्थ।";
+      } else {
+        final response = await model.generateContent([
+          Content.text(userPrompt)
+        ]);
+        return response.text ?? "उत्तर प्राप्त नहीं हुआ।";
       }
-      return "नमस्ते! मैंने आपकी बात सुन ली है। यदि यह कोई नागरिक शिकायत है, तो कृपया अपना वार्ड नंबर या लोकेशन बताएं ताकि मैं इसे दर्ज कर सकूँ।";
-    } catch (_) {
-      return "माफ़ कीजिए, अभी प्रोसेस करने में असमर्थ हूँ।";
+    } catch (e) {
+      return "एआई कनेक्शन में त्रुटि: कृपया इंटरनेट या API Key की जाँच करें।";
     }
   }
 }
@@ -180,8 +206,8 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
 
   Future<void> _initTts() async {
     try {
-      await _flutterTts.setLanguage("hi-IN"); // हिंदी भाषा सेट करना
-      await _flutterTts.setSpeechRate(0.5); // बोलने की सामान्य गति
+      await _flutterTts.setLanguage("hi-IN");
+      await _flutterTts.setSpeechRate(0.5);
       await _flutterTts.setVolume(1.0);
       await _flutterTts.setPitch(1.0);
 
@@ -197,7 +223,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   Future<void> _speakText(String id, String text) async {
     try {
       if (_currentlySpeakingId == id) {
-        // अगर पहले से यही मैसेज बोल रहा है, तो रोक (Stop) दें
         await _flutterTts.stop();
         setState(() => _currentlySpeakingId = null);
       } else {
@@ -228,13 +253,53 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
       if (_messages.isEmpty) {
         _messages.add(ChatMessage(
           id: 'welcome',
-          text: 'नमस्ते 🙏 मैं Sahayak AI हूँ। आप अपनी समस्या पूछ सकते हैं या नीचे दिए गए बटन से मैसेज सुन सकते हैं।',
+          text: 'नमस्ते 🙏 मैं Sahayak AI हूँ। आप ऊपर दिए गए कैमरा या गैलरी बटन से फोटो अपलोड कर सकते हैं, या अपनी समस्या पूछ सकते हैं।',
           isUser: false,
           timestamp: DateTime.now().millisecondsSinceEpoch,
         ));
       }
       _booting = false;
     });
+  }
+
+  Future<void> _pickAndUploadImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, imageQuality: 70);
+      if (picked == null) return;
+
+      final docs = await getApplicationDocumentsDirectory();
+      final folder = Directory('${docs.path}/sahayak_media');
+      if (!await folder.exists()) await folder.create(recursive: true);
+      final target = '${folder.path}/img_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      await File(picked.path).copy(target);
+
+      final userMsgId = 'user_img_${DateTime.now().millisecondsSinceEpoch}_${++_idSeed}';
+      setState(() {
+        _messages.add(ChatMessage(
+          id: userMsgId,
+          text: '[फोटो अपलोड की गई]',
+          isUser: true,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          imagePath: target,
+        ));
+        _aiTyping = true;
+      });
+      LocalStore.saveChat(_messages);
+
+      final aiReplyText = await GeminiService.getGeminiResponse("इस फोटो को analyse करके बताएं कि यह किस प्रकार की समस्या है।", imagePath: target);
+      final aiMsgId = 'ai_img_${DateTime.now().millisecondsSinceEpoch}_${++_idSeed}';
+
+      if (!mounted) return;
+      setState(() {
+        _messages.add(ChatMessage(id: aiMsgId, text: aiReplyText, isUser: false, timestamp: DateTime.now().millisecondsSinceEpoch));
+        _aiTyping = false;
+      });
+      LocalStore.saveChat(_messages);
+      _speakText(aiMsgId, aiReplyText);
+    } catch (_) {
+      setState(() => _aiTyping = false);
+    }
   }
 
   Future<void> _handleSend() async {
@@ -249,7 +314,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     });
     LocalStore.saveChat(_messages);
 
-    final aiReplyText = await GeminiService.getAiResponse(text);
+    final aiReplyText = await GeminiService.getGeminiResponse(text);
     final aiMsgId = 'ai_${DateTime.now().millisecondsSinceEpoch}_${++_idSeed}';
 
     if (!mounted) return;
@@ -258,8 +323,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
       _aiTyping = false;
     });
     LocalStore.saveChat(_messages);
-
-    // ऑटोमैटिक एआई के जवाब को बोलकर सुनाना
     _speakText(aiMsgId, aiReplyText);
   }
 
@@ -268,7 +331,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     if (_booting) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sahayak AI (Voice Reader)'),
+        title: const Text('Sahayak AI'),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -282,13 +345,35 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
         children: [
           Column(
             children: [
+              // कैमरा और गैलरी बटन
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                      onPressed: () => _pickAndUploadImage(ImageSource.camera),
+                      icon: const Icon(Icons.camera_alt, size: 18, color: Colors.white),
+                      label: const Text('Camera', style: TextStyle(color: Colors.white)),
+                    ),
+                    const SizedBox(width: 15),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D9488)),
+                      onPressed: () => _pickAndUploadImage(ImageSource.gallery),
+                      icon: const Icon(Icons.photo_library, size: 18, color: Colors.white),
+                      label: const Text('Gallery', style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              ),
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.all(12),
                   itemCount: _messages.length + (_aiTyping ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (index >= _messages.length) {
-                      return const ListTile(title: Text('AI is thinking...'));
+                      return const ListTile(title: Text('Gemini AI is thinking...'));
                     }
                     final msg = _messages[index];
                     final bool isSpeaking = _currentlySpeakingId == msg.id;
@@ -307,41 +392,43 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (msg.imagePath != null) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(File(msg.imagePath!), width: 180, height: 120, fit: BoxFit.cover),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
                             Text(msg.text, style: const TextStyle(fontSize: 14, height: 1.3)),
                             const SizedBox(height: 8),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                InkWell(
-                                  onTap: () => _speakText(msg.id, msg.text),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isSpeaking ? Colors.red.withOpacity(0.3) : AppColors.highlight.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          isSpeaking ? Icons.stop_rounded : Icons.volume_up_rounded,
-                                          size: 14,
-                                          color: isSpeaking ? Colors.redAccent : AppColors.highlight,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          isSpeaking ? 'Stop' : 'Listen',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: isSpeaking ? Colors.redAccent : AppColors.highlight,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                            InkWell(
+                              onTap: () => _speakText(msg.id, msg.text),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isSpeaking ? Colors.red.withOpacity(0.3) : AppColors.highlight.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                              ],
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isSpeaking ? Icons.stop_rounded : Icons.volume_up_rounded,
+                                      size: 14,
+                                      color: isSpeaking ? Colors.redAccent : AppColors.highlight,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      isSpeaking ? 'Stop' : 'Listen',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: isSpeaking ? Colors.redAccent : AppColors.highlight,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -358,7 +445,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                       child: TextField(
                         controller: _inputController,
                         decoration: const InputDecoration(
-                          hintText: 'अपनी समस्या या सवाल यहाँ लिखें...',
+                          hintText: 'अपनी समस्या या सवाल पूछें...',
                           filled: true,
                           fillColor: AppColors.card,
                           border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(20)), borderSide: BorderSide.none),
@@ -381,14 +468,29 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
             ],
           ),
           _complaints.isEmpty
-              ? const Center(child: Text('कोई कंप्लेंट दर्ज नहीं है।'))
+              ? const Center(child: Text('कोई शिकायत दर्ज नहीं है।'))
               : ListView.builder(
                   itemCount: _complaints.length,
                   itemBuilder: (context, index) {
                     final c = _complaints[index];
-                    return ListTile(
-                      title: Text(c.title),
-                      subtitle: Text('Ticket: ${c.ticketId} | Ward: ${c.ward}'),
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.card,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(c.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.highlight)),
+                          const SizedBox(height: 4),
+                          Text('🎫 टिकट आईडी: ${c.ticketId}'),
+                          Text('🏛️ विभाग: ${c.department}'),
+                          Text('📍 विवरण: ${c.ward}'),
+                        ],
+                      ),
                     );
                   },
                 ),
