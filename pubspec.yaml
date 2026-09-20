@@ -9,9 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  http: ^1.2.0
-  speech_to_text: ^6.6.1
-  flutter_tts: ^3.8.5
   image_picker: ^1.1.2
   shared_preferences: ^2.2.3
 
