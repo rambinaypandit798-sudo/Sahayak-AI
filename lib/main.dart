@@ -69,7 +69,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
   List<ComplaintModel> _savedComplaints = [];
   File? _selectedImage;
-  bool _waitingForLocation = false; // यह ट्रैक करने के लिए कि क्या एआई अभी लोकेशन/वार्ड का सवाल पूछ रहा है
+  bool _waitingForLocation = false;
 
   @override
   void initState() {
@@ -98,7 +98,6 @@ class _MainDashboardState extends State<MainDashboard> {
     } catch (_) {}
   }
 
-  // स्मार्ट Q&A और फोटो एनालिसिस इंजन
   void _processAIInteraction(String userInput, {bool isPhoto = false}) {
     setState(() => _isLoading = true);
 
@@ -107,17 +106,14 @@ class _MainDashboardState extends State<MainDashboard> {
       String department = "नगर निगम / संबंधित विभाग";
 
       if (isPhoto) {
-        // फोटो अपलोड होने पर एआई तुरंत समस्या पहचानेगा और सही जगह रूट करने के लिए सवाल पूछेगा
         _waitingForLocation = true;
         aiReply = "📷 फोटो की पहचान हो गई है: यह सड़क और गड्ढों/जलभराव से जुड़ी समस्या है, जो 'लोक निर्माण विभाग (PWD) / नगर निगम' के अंतर्गत आती है।\n\n👉 सही जगह शिकायत दर्ज करने के लिए कृपया अपना **वार्ड नंबर या इलाके का नाम** बताएं:";
         department = "पीडब्ल्यूडी / नगर निगम (सत्यापन बाकी)";
       } else if (_waitingForLocation) {
-        // जब यूजर लोकेशन या वार्ड का जवाब देगा, तब कंप्लेंट पक्की हो जाएगी
         _waitingForLocation = false;
         aiReply = "✅ धन्यवाद! आपकी लोकेशन ($userInput) मिल गई है। आपकी शिकायत को संबंधित सरकारी विभाग में सफलतापूर्वक भेज दिया गया है और डेटा सुरक्षित कर लिया गया है।";
         department = "नगर निगम (वार्ड: $userInput)";
 
-        // फाइनल कंप्लेंट लिस्ट में जोड़ना
         _savedComplaints.insert(0, ComplaintModel(
           title: "नागरिक शिकायत (फोटो/चैट)",
           department: department,
@@ -126,7 +122,6 @@ class _MainDashboardState extends State<MainDashboard> {
         ));
         _saveComplaintsToLocal();
       } else {
-        // सामान्य बातचीत या समस्या का उत्तर
         String q = userInput.toLowerCase();
         if (q.contains("सड़क") || q.contains("गड्ढा") || q.contains("रोड")) {
           aiReply = "यह सड़क से जुड़ी समस्या है। इसके लिए 'पीडब्ल्यूडी' विभाग है। कृपया इस क्षेत्र का **पिनकोड या वार्ड नंबर** बताएं ताकि हम इसे आगे बढ़ा सकें:";
@@ -321,7 +316,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.between,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(item.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amber)),
                                 Text(item.date, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
