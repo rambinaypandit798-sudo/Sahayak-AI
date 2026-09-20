@@ -1,5 +1,5 @@
 // ============================================================================
-//  Sahayak AI — Complete Production App (Camera, Gallery, Gemini AI & TTS)
+//  Sahayak AI — Secure Production App with Dynamic API Key Setup & Gemini Brain
 // ============================================================================
 
 import 'dart:async';
@@ -68,8 +68,19 @@ class Complaint {
 }
 
 class LocalStore {
-  static const String _chatKey = 'sahayak_chat_v7';
-  static const String _complaintsKey = 'sahayak_complaints_v7';
+  static const String _chatKey = 'sahayak_chat_secure';
+  static const String _complaintsKey = 'sahayak_complaints_secure';
+  static const String _apiKeyStore = 'gemini_user_api_key';
+
+  static Future<String?> getSavedApiKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_apiKeyStore);
+  }
+
+  static Future<void> saveApiKey(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_apiKeyStore, key.trim());
+  }
 
   static Future<List<ChatMessage>> loadChat() async {
     try {
@@ -111,12 +122,10 @@ class LocalStore {
 }
 
 class GeminiService {
-  // 🔑 अपनी असली Gemini API Key यहाँ डालें
-  static const String apiKey = "YOUR_GEMINI_API_KEY";
-
   static Future<String> getGeminiResponse(String userPrompt, {String? imagePath}) async {
-    if (apiKey == "YOUR_GEMINI_API_KEY" || apiKey.isEmpty) {
-      return "नमस्ते! मैं Sahayak AI हूँ। आप अपनी समस्या पूछ सकते हैं या फोटो अपलोड कर सकते हैं। (नोट: कोड में API Key दर्ज करें)।";
+    final apiKey = await LocalStore.getSavedApiKey();
+    if (apiKey == null || apiKey.isEmpty) {
+      return "⚠️ कृपया सेटिंग्स में जाकर अपनी Gemini API Key दर्ज करें ताकि एआई काम कर सके।";
     }
 
     try {
@@ -125,14 +134,13 @@ class GeminiService {
         apiKey: apiKey,
         systemInstruction: Content.text(
           "आप 'Sahayak AI' हैं—एक बुद्धिमान नागरिक और छात्र सहायक (Civic & Student Assistant)। "
-          "लोगों की नागरिक समस्याओं (सड़क, पानी, कचरा) और पढ़ाई/शैक्षणिक सवालों में मदद करें। "
-          "हिंदी में उत्तर दें।"
+          "लोगों की नागरिक समस्याओं (सड़क, पानी, कचरा) और पढ़ाई/शैक्षणिक सवालों में मदद करें। हमेशा हिंदी में उत्तर दें।"
         ),
       );
 
       if (imagePath != null && File(imagePath).existsSync()) {
         final imageBytes = await File(imagePath).readAsBytes();
-        final prompt = TextPart(userPrompt.isEmpty ? "इस फोटो को देखकर बताएं कि यह किस प्रकार की समस्या है।" : userPrompt);
+        final prompt = TextPart(userPrompt.isEmpty ? "इस फोटो को analyse करके बताएं कि यह किस प्रकार की समस्या है।" : userPrompt);
         final imagePart = DataPart('image/jpeg', imageBytes);
 
         final response = await model.generateContent([
@@ -146,7 +154,7 @@ class GeminiService {
         return response.text ?? "उत्तर प्राप्त नहीं हुआ।";
       }
     } catch (e) {
-      return "एआई कनेक्शन में त्रुटि: कृपया इंटरनेट या API Key की जाँच करें।";
+      return "एआई कनेक्शन में त्रुटि: कृपया अपनी API Key की जाँच करें।";
     }
   }
 }
@@ -172,8 +180,90 @@ class SahayakApp extends StatelessWidget {
         scaffoldBackgroundColor: AppColors.bg,
         colorScheme: const ColorScheme.dark(primary: AppColors.primary, secondary: AppColors.highlight, surface: AppColors.card),
       ),
-      home: const HomeShell(),
+      home: const ApiKeyWrapper(),
     );
+  }
+}
+
+// पहली बार API Key मांगने के लिए रैपर स्क्रीन
+class ApiKeyWrapper extends StatefulWidget {
+  const ApiKeyWrapper({super.key});
+
+  @override
+  State<ApiKeyWrapper> createState() => _ApiKeyWrapperState();
+}
+
+class _ApiKeyWrapperState extends State<ApiKeyWrapper> {
+  bool _isLoading = true;
+  bool _hasKey = false;
+  final TextEditingController _keyController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _checkKey();
+  }
+
+  Future<void> _checkKey() async {
+    final key = await LocalStore.getSavedApiKey();
+    setState(() {
+      _hasKey = key != null && key.isNotEmpty;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _saveAndProceed() async {
+    final text = _keyController.text.trim();
+    if (text.isEmpty) return;
+    await LocalStore.saveApiKey(text);
+    setState(() {
+      _hasKey = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (!_hasKey) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Enter Gemini API Key')),
+        body: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'सुरक्षा के लिए कोड में API Key नहीं रखी गई है। कृपया ऐप शुरू करने के लिए अपनी Gemini API Key यहाँ दर्ज करें:',
+                style: TextStyle(fontSize: 15, height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _keyController,
+                decoration: const InputDecoration(
+                  labelText: 'Gemini API Key',
+                  border: OutlineInputBorder(),
+                  filled: true,
+                  fillColor: AppColors.card,
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, padding: const EdgeInsets.all(14)),
+                onPressed: _saveAndProceed,
+                child: const Text('Save & Start App', style: TextStyle(color: Colors.white, fontSize: 16)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return const HomeShell();
   }
 }
 
@@ -331,7 +421,20 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     if (_booting) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sahayak AI'),
+        title: const Text('Sahayak AI (Secure)'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.key_rounded),
+            tooltip: 'Change API Key',
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('gemini_user_api_key');
+              if (mounted) {
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ApiKeyWrapper()));
+              }
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -345,7 +448,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
         children: [
           Column(
             children: [
-              // कैमरा और गैलरी बटन
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                 child: Row(
