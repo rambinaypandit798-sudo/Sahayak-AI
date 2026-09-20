@@ -59,12 +59,10 @@ class _MainDashboardState extends State<MainDashboard> {
   final TextEditingController _chatController = TextEditingController();
   
   final List<Map<String, String>> _chatMessages = [
-    {"role": "ai", "text": "नमस्ते! मैं 'Sahayak AI' हूँ। आपकी नागरिक समस्या क्या है? यहाँ टाइप करें और भेजें, मैं सही विभाग में शिकायत दर्ज करूँगा।"}
+    {"role": "ai", "text": "Hello! I am Sahayak AI. Type your civic issue below, and I will help route it to the correct department."}
   ];
 
   List<ComplaintModel> _savedComplaints = [];
-  bool _waitingForLocation = false;
-  String _pendingIssue = "";
 
   @override
   void initState() {
@@ -101,47 +99,20 @@ class _MainDashboardState extends State<MainDashboard> {
       _chatMessages.add({"role": "user", "text": text});
     });
 
-    Future.delayed(const Duration(milliseconds: 500), () {
-      String aiReply = "";
-      String department = "नगर निगम / संबंधित विभाग";
+    Future.delayed(const Duration(milliseconds: 400), () {
+      String aiReply = "Your complaint regarding '$text' has been successfully registered and routed to the Municipal Corporation / PWD department. Data is saved locally.";
+      
+      setState(() {
+        _chatMessages.add({"role": "ai", "text": aiReply});
+        _savedComplaints.insert(0, ComplaintModel(
+          title: text.length > 25 ? "${text.substring(0, 25)}..." : text,
+          department: "Municipal Corporation / PWD",
+          date: DateTime.now().toString().substring(0, 16),
+          details: "Issue: $text",
+        ));
+      });
 
-      if (_waitingForLocation) {
-        _waitingForLocation = false;
-        aiReply = "✅ धन्यवाद! आपकी लोकेशन/वार्ड ($text) दर्ज हो गई है। आपकी शिकायत को संबंधित सरकारी विभाग में भेज दिया गया है और डेटा सुरक्षित रूप से सहेज लिया गया है।";
-        department = "नगर निगम (वार्ड: $text)";
-
-        setState(() {
-          _savedComplaints.insert(0, ComplaintModel(
-            title: _pendingIssue.length > 25 ? "${_pendingIssue.substring(0, 25)}..." : _pendingIssue,
-            department: department,
-            date: DateTime.now().toString().substring(0, 16),
-            details: "समस्या: $_pendingIssue | वार्ड/लोकेशन: $text",
-          ));
-          _chatMessages.add({"role": "ai", "text": aiReply});
-        });
-
-        _saveComplaintsToLocal();
-        _pendingIssue = "";
-      } else {
-        String q = text.toLowerCase();
-        if (q.contains("सड़क") || q.contains("गड्ढा") || q.contains("रोड")) {
-          _pendingIssue = text;
-          _waitingForLocation = true;
-          aiReply = "यह सड़क और गड्ढों से जुड़ी समस्या है, जो 'पीडब्ल्यूडी (PWD)' के अंतर्गत आती है।\n\n👉 सही जगह शिकायत दर्ज करने के लिए कृपया अपना **वार्ड नंबर या इलाके का नाम** बताएं:";
-        } else if (q.contains("कचरा") || q.contains("गंदगी")) {
-          _pendingIssue = text;
-          _waitingForLocation = true;
-          aiReply = "यह स्वच्छता विभाग के अंतर्गत आता है।\n\n👉 कृपया अपने **इलाके का नाम या वार्ड नंबर** बताएं:";
-        } else {
-          _pendingIssue = text;
-          _waitingForLocation = true;
-          aiReply = "आपकी समस्या दर्ज कर ली गई है। इसे सही सरकारी विभाग में भेजने के लिए कृपया अपना **वार्ड नंबर या लोकेशन** बताएं:";
-        }
-
-        setState(() {
-          _chatMessages.add({"role": "ai", "text": aiReply});
-        });
-      }
+      _saveComplaintsToLocal();
     });
   }
 
@@ -151,13 +122,13 @@ class _MainDashboardState extends State<MainDashboard> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Sahayak AI - Stable Dashboard'),
+          title: const Text('Sahayak AI - Dashboard'),
           backgroundColor: const Color(0xFF1E293B),
           bottom: const TabBar(
             indicatorColor: Color(0xFF38BDF8),
             tabs: [
-              Tab(icon: Icon(Icons.chat), text: "AI सहायक चैट"),
-              Tab(icon: Icon(Icons.list_alt), text: "मेरी सभी कंप्लेंट्स"),
+              Tab(icon: Icon(Icons.chat), text: "AI Chat"),
+              Tab(icon: Icon(Icons.list_alt), text: "My Complaints"),
             ],
           ),
         ),
@@ -181,7 +152,6 @@ class _MainDashboardState extends State<MainDashboard> {
                           decoration: BoxDecoration(
                             color: isAi ? const Color(0xFF1E293B) : const Color(0xFF2563EB),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: isAi ? const Color(0xFF334155) : Colors.transparent),
                           ),
                           child: Text(
                             msg["text"]!,
@@ -202,7 +172,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           controller: _chatController,
                           style: const TextStyle(color: Colors.white),
                           decoration: InputDecoration(
-                            hintText: 'अपनी समस्या या वार्ड यहाँ लिखें...',
+                            hintText: 'Type your issue here...',
                             hintStyle: const TextStyle(color: Color(0xFF64748B)),
                             filled: true,
                             fillColor: const Color(0xFF1E293B),
@@ -227,7 +197,7 @@ class _MainDashboardState extends State<MainDashboard> {
             _savedComplaints.isEmpty
                 ? const Center(
                     child: Text(
-                      'अभी तक कोई कंप्लेंट दर्ज नहीं की गई है。\nचैट में अपनी समस्या लिखकर भेजें!',
+                      'No complaints registered yet.\nType in the chat tab to create one!',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
                     ),
@@ -256,9 +226,9 @@ class _MainDashboardState extends State<MainDashboard> {
                               ],
                             ),
                             const SizedBox(height: 6),
-                            Text("विभाग: ${item.department}", style: const TextStyle(fontSize: 13, color: Color(0xFF38BDF8), fontWeight: FontWeight.w500)),
+                            Text("Department: ${item.department}", style: const TextStyle(fontSize: 13, color: Color(0xFF38BDF8), fontWeight: FontWeight.w500)),
                             const SizedBox(height: 8),
-                            Text("विवरण: ${item.details}", style: const TextStyle(fontSize: 13, color: Colors.white, height: 1.3)),
+                            Text("Details: ${item.details}", style: const TextStyle(fontSize: 13, color: Colors.white, height: 1.3)),
                           ],
                         ),
                       );
