@@ -126,27 +126,25 @@ class _MainDashboardState extends State<MainDashboard> {
 
   void _listen() async {
     try {
-      if (!_isListening) {
-        bool available = await _speech.initialize();
-        if (available) {
-          setState(() => _isListening = true);
-          _speech.listen(
-            onResult: (val) => setState(() {
-              _statusText = val.recognizedWords;
-              if (val.hasConfidenceRating && val.confidence > 0) {
-                _sendMessageToAI(_statusText);
-              }
-            }),
-          );
-        }
-      } else {
-        setState(() => _isListening = false);
-        _speech.stop();
+      bool available = await _speech.initialize(
+        onStatus: (val) => print('onStatus: $val'),
+        onError: (val) => print('onError: $val'),
+      );
+      if (available) {
+        setState(() => _isListening = true);
+        _speech.listen(
+          onResult: (val) => setState(() {
+            _statusText = val.recognizedWords;
+            if (val.hasConfidenceRating && val.confidence > 0) {
+              _sendMessageToAI(_statusText);
+            }
+          }),
+        );
       }
     } catch (e) {
       setState(() {
         _isListening = false;
-        _statusText = "माइक्रोफोन अनुमति त्रुटि";
+        _statusText = "माइक्रोफोन त्रुटि";
       });
     }
   }
@@ -242,7 +240,7 @@ class _MainDashboardState extends State<MainDashboard> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Sahayak AI - Live & Saved Data'),
+          title: const Text('Sahayak AI - Stable Version'),
           backgroundColor: const Color(0xFF1E293B),
           bottom: const TabBar(
             indicatorColor: Color(0xFF38BDF8),
