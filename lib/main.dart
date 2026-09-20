@@ -25,7 +25,7 @@ class SahayakAIApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF0F172A),
         primaryColor: const Color(0xFF2563EB),
       ),
-      home: const MainDashboard(), // लॉगिन हटाकर सीधा डैशबोर्ड सेट किया गया है
+      home: const MainDashboard(),
     );
   }
 }
@@ -95,7 +95,6 @@ class _MainDashboardState extends State<MainDashboard> {
     } catch (_) {}
   }
 
-  // लोकल स्टोरेज से पिछला डेटा और कंप्लेंट्स लोड करना
   Future<void> _loadSavedData() async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -109,7 +108,6 @@ class _MainDashboardState extends State<MainDashboard> {
     } catch (_) {}
   }
 
-  // कंप्लेंट्स को परमानेंट सेव करना
   Future<void> _saveComplaintsToLocal() async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -176,7 +174,6 @@ class _MainDashboardState extends State<MainDashboard> {
 
       String aiReply = response.text ?? "समस्या दर्ज कर ली गई है।";
 
-      // ऑटोमैटिक कंप्लेंट रिकॉर्ड में जोड़ना
       setState(() {
         _isLoading = false;
         _chatMessages.add({"role": "ai", "text": aiReply});
@@ -215,7 +212,6 @@ class _MainDashboardState extends State<MainDashboard> {
       final response = await model.generateContent([Content.text("आप एक सरकारी नागरिक सहायक (Sahayak AI) हैं। नागरिक की इस समस्या का समाधान और सही विभाग बताएं: $messageText")]);
       String aiReply = response.text ?? "शिकायत दर्ज हो गई है।";
 
-      // कंप्लेंट लिस्ट में सेव करना
       setState(() {
         _isLoading = false;
         _chatMessages.add({"role": "ai", "text": aiReply});
@@ -258,7 +254,6 @@ class _MainDashboardState extends State<MainDashboard> {
         ),
         body: TabBarView(
           children: [
-            // टैब 1: चैट और वॉयस/कैमरा असिस्टेंट
             Column(
               children: [
                 Padding(
@@ -368,8 +363,6 @@ class _MainDashboardState extends State<MainDashboard> {
                 ),
               ],
             ),
-
-            // टैब 2: सहेजी गई सभी कंप्लेंट्स और उनकी पूरी डिटेल्स
             _savedComplaints.isEmpty
                 ? const Center(
                     child: Text(
@@ -395,7 +388,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.between,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(item.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amber)),
                                 Text(item.date, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
