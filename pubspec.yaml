@@ -9,7 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  google_generative_ai: ^0.4.0
+  http: ^1.2.0
   speech_to_text: ^6.6.1
   flutter_tts: ^3.8.5
   image_picker: ^1.1.2
