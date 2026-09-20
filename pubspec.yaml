@@ -9,7 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  image_picker: ^1.1.2
   shared_preferences: ^2.2.3
 
 dev_dependencies:

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:io';
 import 'dart:convert';
 
 void main() async {
@@ -58,18 +56,15 @@ class MainDashboard extends StatefulWidget {
 }
 
 class _MainDashboardState extends State<MainDashboard> {
-  final ImagePicker _picker = ImagePicker();
   final TextEditingController _chatController = TextEditingController();
-
-  bool _isLoading = false;
   
   final List<Map<String, String>> _chatMessages = [
-    {"role": "ai", "text": "नमस्ते! मैं 'Sahayak AI' हूँ। अपनी समस्या यहाँ लिखें या फोटो अपलोड करें। फोटो अपलोड करने पर मैं सही विभाग में भेजने के लिए आपसे जरूरी सवाल पूछूंगा।"}
+    {"role": "ai", "text": "नमस्ते! मैं 'Sahayak AI' हूँ। आपकी नागरिक समस्या क्या है? यहाँ टाइप करें और भेजें, मैं सही विभाग में शिकायत दर्ज करूँगा।"}
   ];
 
   List<ComplaintModel> _savedComplaints = [];
-  File? _selectedImage;
   bool _waitingForLocation = false;
+  String _pendingIssue = "";
 
   @override
   void initState() {
@@ -98,67 +93,6 @@ class _MainDashboardState extends State<MainDashboard> {
     } catch (_) {}
   }
 
-  void _processAIInteraction(String userInput, {bool isPhoto = false}) {
-    setState(() => _isLoading = true);
-
-    Future.delayed(const Duration(seconds: 1), () {
-      String aiReply = "";
-      String department = "नगर निगम / संबंधित विभाग";
-
-      if (isPhoto) {
-        _waitingForLocation = true;
-        aiReply = "📷 फोटो की पहचान हो गई है: यह सड़क और गड्ढों/जलभराव से जुड़ी समस्या है, जो 'लोक निर्माण विभाग (PWD) / नगर निगम' के अंतर्गत आती है।\n\n👉 सही जगह शिकायत दर्ज करने के लिए कृपया अपना **वार्ड नंबर या इलाके का नाम** बताएं:";
-        department = "पीडब्ल्यूडी / नगर निगम (सत्यापन बाकी)";
-      } else if (_waitingForLocation) {
-        _waitingForLocation = false;
-        aiReply = "✅ धन्यवाद! आपकी लोकेशन ($userInput) मिल गई है। आपकी शिकायत को संबंधित सरकारी विभाग में सफलतापूर्वक भेज दिया गया है और डेटा सुरक्षित कर लिया गया है।";
-        department = "नगर निगम (वार्ड: $userInput)";
-
-        _savedComplaints.insert(0, ComplaintModel(
-          title: "नागरिक शिकायत (फोटो/चैट)",
-          department: department,
-          date: DateTime.now().toString().substring(0, 16),
-          details: "विवरण: सड़क/नागरिक समस्या। लोकेशन/वार्ड: $userInput",
-        ));
-        _saveComplaintsToLocal();
-      } else {
-        String q = userInput.toLowerCase();
-        if (q.contains("सड़क") || q.contains("गड्ढा") || q.contains("रोड")) {
-          aiReply = "यह सड़क से जुड़ी समस्या है। इसके लिए 'पीडब्ल्यूडी' विभाग है। कृपया इस क्षेत्र का **पिनकोड या वार्ड नंबर** बताएं ताकि हम इसे आगे बढ़ा सकें:";
-          _waitingForLocation = true;
-        } else if (q.contains("कचरा") || q.contains("गंदगी")) {
-          aiReply = "यह स्वच्छता विभाग के अंतर्गत है। कृपया अपने **इलाके का नाम** बताएं:";
-          _waitingForLocation = true;
-        } else {
-          aiReply = "आपकी समस्या दर्ज कर ली गई है। क्या आप इससे जुड़ी कोई फोटो अपलोड करना चाहते हैं या कोई अन्य जानकारी देना चाहते हैं?";
-        }
-      }
-
-      setState(() {
-        _isLoading = false;
-        _chatMessages.add({"role": "ai", "text": aiReply});
-      });
-    });
-  }
-
-  Future<void> _pickImageAndAnalyze(ImageSource source) async {
-    try {
-      final XFile? image = await _picker.pickImage(source: source, imageQuality: 80);
-      if (image == null) return;
-
-      setState(() {
-        _selectedImage = File(image.path);
-        _chatMessages.add({"role": "user", "text": "[समस्या की फोटो अपलोड की गई]"});
-      });
-
-      _processAIInteraction("photo_uploaded", isPhoto: true);
-    } catch (e) {
-      setState(() {
-        _chatMessages.add({"role": "ai", "text": "त्रुटि: फोटो लोड करने में असमर्थ।"});
-      });
-    }
-  }
-
   void _handleUserMessage(String text) {
     if (text.trim().isEmpty) return;
 
@@ -167,7 +101,48 @@ class _MainDashboardState extends State<MainDashboard> {
       _chatMessages.add({"role": "user", "text": text});
     });
 
-    _processAIInteraction(text);
+    Future.delayed(const Duration(milliseconds: 500), () {
+      String aiReply = "";
+      String department = "नगर निगम / संबंधित विभाग";
+
+      if (_waitingForLocation) {
+        _waitingForLocation = false;
+        aiReply = "✅ धन्यवाद! आपकी लोकेशन/वार्ड ($text) दर्ज हो गई है। आपकी शिकायत को संबंधित सरकारी विभाग में भेज दिया गया है और डेटा सुरक्षित रूप से सहेज लिया गया है।";
+        department = "नगर निगम (वार्ड: $text)";
+
+        setState(() {
+          _savedComplaints.insert(0, ComplaintModel(
+            title: _pendingIssue.length > 25 ? "${_pendingIssue.substring(0, 25)}..." : _pendingIssue,
+            department: department,
+            date: DateTime.now().toString().substring(0, 16),
+            details: "समस्या: $_pendingIssue | वार्ड/लोकेशन: $text",
+          ));
+          _chatMessages.add({"role": "ai", "text": aiReply});
+        });
+
+        _saveComplaintsToLocal();
+        _pendingIssue = "";
+      } else {
+        String q = text.toLowerCase();
+        if (q.contains("सड़क") || q.contains("गड्ढा") || q.contains("रोड")) {
+          _pendingIssue = text;
+          _waitingForLocation = true;
+          aiReply = "यह सड़क और गड्ढों से जुड़ी समस्या है, जो 'पीडब्ल्यूडी (PWD)' के अंतर्गत आती है।\n\n👉 सही जगह शिकायत दर्ज करने के लिए कृपया अपना **वार्ड नंबर या इलाके का नाम** बताएं:";
+        } else if (q.contains("कचरा") || q.contains("गंदगी")) {
+          _pendingIssue = text;
+          _waitingForLocation = true;
+          aiReply = "यह स्वच्छता विभाग के अंतर्गत आता है।\n\n👉 कृपया अपने **इलाके का नाम या वार्ड नंबर** बताएं:";
+        } else {
+          _pendingIssue = text;
+          _waitingForLocation = true;
+          aiReply = "आपकी समस्या दर्ज कर ली गई है। इसे सही सरकारी विभाग में भेजने के लिए कृपया अपना **वार्ड नंबर या लोकेशन** बताएं:";
+        }
+
+        setState(() {
+          _chatMessages.add({"role": "ai", "text": aiReply});
+        });
+      }
+    });
   }
 
   @override
@@ -176,7 +151,7 @@ class _MainDashboardState extends State<MainDashboard> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Sahayak AI - Smart Q&A & Auto-Save'),
+          title: const Text('Sahayak AI - Stable Dashboard'),
           backgroundColor: const Color(0xFF1E293B),
           bottom: const TabBar(
             indicatorColor: Color(0xFF38BDF8),
@@ -190,43 +165,6 @@ class _MainDashboardState extends State<MainDashboard> {
           children: [
             Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0D9488),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        ),
-                        onPressed: () => _pickImageAndAnalyze(ImageSource.camera),
-                        icon: const Icon(Icons.camera_alt, size: 18),
-                        label: const Text('Camera', style: TextStyle(fontSize: 15)),
-                      ),
-                      const SizedBox(width: 20),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        ),
-                        onPressed: () => _pickImageAndAnalyze(ImageSource.gallery),
-                        icon: const Icon(Icons.photo_library, size: 18),
-                        label: const Text('Gallery', style: TextStyle(fontSize: 15)),
-                      ),
-                    ],
-                  ),
-                ),
-                if (_selectedImage != null)
-                  Container(
-                    height: 70,
-                    width: 70,
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      image: DecorationImage(image: FileImage(_selectedImage!), fit: BoxFit.cover),
-                    ),
-                  ),
                 Expanded(
                   child: ListView.builder(
                     padding: const EdgeInsets.all(12),
@@ -254,11 +192,6 @@ class _MainDashboardState extends State<MainDashboard> {
                     },
                   ),
                 ),
-                if (_isLoading)
-                  const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: CircularProgressIndicator(),
-                  ),
                 Container(
                   padding: const EdgeInsets.all(8.0),
                   color: const Color(0xFF0F172A),
@@ -269,7 +202,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           controller: _chatController,
                           style: const TextStyle(color: Colors.white),
                           decoration: InputDecoration(
-                            hintText: 'यहाँ जवाब या समस्या लिखें...',
+                            hintText: 'अपनी समस्या या वार्ड यहाँ लिखें...',
                             hintStyle: const TextStyle(color: Color(0xFF64748B)),
                             filled: true,
                             fillColor: const Color(0xFF1E293B),
@@ -294,7 +227,7 @@ class _MainDashboardState extends State<MainDashboard> {
             _savedComplaints.isEmpty
                 ? const Center(
                     child: Text(
-                      'अभी तक कोई कंप्लेंट दर्ज नहीं की गई है。\nफोटो अपलोड करें या चैट करें!',
+                      'अभी तक कोई कंप्लेंट दर्ज नहीं की गई है。\nचैट में अपनी समस्या लिखकर भेजें!',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
                     ),
