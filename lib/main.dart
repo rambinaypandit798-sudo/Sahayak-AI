@@ -43,7 +43,7 @@ class OnboardingScreen extends StatelessWidget {
             children: [
               const Text('Sahayak AI', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8))),
               const SizedBox(height: 8),
-              const Text('Smart Citizen\nAssistant for\nEvery Problem', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w300, color: Colors.white, height: 1.2)),
+              const Text('Smart Interactive\nCitizen Assistant', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w300, color: Colors.white, height: 1.2)),
               const Spacer(),
               Container(
                 height: 220,
@@ -56,11 +56,11 @@ class OnboardingScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: const [
-                    Icon(Icons.mic, size: 45, color: Color(0xFFFBBF24)),
+                    Icon(Icons.chat_bubble_outline, size: 45, color: Color(0xFFFBBF24)),
                     SizedBox(height: 10),
-                    Icon(Icons.camera_alt, size: 35, color: Color(0xFF34D399)),
+                    Icon(Icons.psychology, size: 35, color: Color(0xFF34D399)),
                     SizedBox(height: 12),
-                    Text('Gemini Vision & Voice Engine (Android 11-16)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                    Text('AI Smart Q&A & Department Routing', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
                   ],
                 ),
               ),
@@ -196,12 +196,19 @@ class _MainDashboardState extends State<MainDashboard> {
   late stt.SpeechToText _speech;
   late FlutterTts _flutterTts;
   final ImagePicker _picker = ImagePicker();
+  final TextEditingController _chatController = TextEditingController();
 
   bool _isListening = false;
   bool _isLoading = false;
   String _statusText = "माइक से बोलें या फोटो अपलोड करें...";
-  String _aiResponse = "यहाँ Gemini AI का विश्लेषण दिखाई देगा।";
+  
+  // चैट इतिहास जिसमें एआई के सवाल और यूजर के जवाब रहेंगे
+  final List<Map<String, String>> _chatMessages = [
+    {"role": "ai", "text": "नमस्ते! मैं 'Sahayak AI' हूँ। आप किस नागरिक समस्या (सड़क, कचरा, पानी आदि) का सामना कर रहे हैं? फोटो खींचें या बोलकर बताएं।"}
+  ];
+
   File? _selectedImage;
+  ChatSession? _chatSession;
 
   @override
   void initState() {
@@ -209,6 +216,7 @@ class _MainDashboardState extends State<MainDashboard> {
     _speech = stt.SpeechToText();
     _flutterTts = FlutterTts();
     _initTts();
+    _initGeminiChat();
   }
 
   void _initTts() async {
@@ -218,20 +226,30 @@ class _MainDashboardState extends State<MainDashboard> {
     } catch (_) {}
   }
 
+  void _initGeminiChat() {
+    try {
+      final model = GenerativeModel(
+        model: 'gemini-1.5-flash',
+        apiKey: _geminiApiKey.isNotEmpty ? _geminiApiKey : "YOUR_API_KEY",
+      );
+      // चैट सेशन शुरू किया गया है ताकि एआई संदर्भ (Context) याद रखे और क्रॉस-क्वेश्चन कर सके
+      _chatSession = model.startChat(history: [
+        Content.text("आप एक सरकारी नागरिक सहायक (Sahayak AI) हैं। आपका काम नागरिकों की समस्याओं को समझना है। यदि जानकारी अधूरी है, तो संबंधित विभाग (जैसे नगर निगम, पीडब्ल्यूडी, जल बोर्ड) तक सही से शिकायत दर्ज करने के लिए उपयोगकर्ता से सटीक सवाल (जैसे लोकेशन, वार्ड नंबर, समस्या कितने दिनों से है) पूछें। हमेशा हिंदी में बात करें।")
+      ]);
+    } catch (_) {}
+  }
+
   void _listen() async {
     try {
       if (!_isListening) {
-        bool available = await _speech.initialize(
-          onStatus: (val) => print('onStatus: $val'),
-          onError: (val) => print('onError: $val'),
-        );
+        bool available = await _speech.initialize();
         if (available) {
           setState(() => _isListening = true);
           _speech.listen(
             onResult: (val) => setState(() {
               _statusText = val.recognizedWords;
               if (val.hasConfidenceRating && val.confidence > 0) {
-                _sendTextToGemini(_statusText);
+                _sendMessageToAI(_statusText);
               }
             }),
           );
@@ -243,7 +261,7 @@ class _MainDashboardState extends State<MainDashboard> {
     } catch (e) {
       setState(() {
         _isListening = false;
-        _statusText = "माइक्रोफोन अनुमति की आवश्यकता है";
+        _statusText = "माइक्रोफोन अनुमति त्रुटि";
       });
     }
   }
@@ -256,7 +274,7 @@ class _MainDashboardState extends State<MainDashboard> {
       setState(() {
         _selectedImage = File(image.path);
         _isLoading = true;
-        _aiResponse = "📷 फोटो अपलोड हो रही है और Gemini 1.5 Flash Vision द्वारा जांची जा रही है...";
+        _chatMessages.add({"role": "user", "text": "[फोटो अपलोड की गई]"});
       });
 
       final model = GenerativeModel(
@@ -265,55 +283,61 @@ class _MainDashboardState extends State<MainDashboard> {
       );
 
       final imageBytes = await _selectedImage!.readAsBytes();
-      final prompt = TextPart("आप 'Sahayak AI' हैं। इस तस्वीर में दिखाई गई नागरिक समस्या (जैसे टूटी सड़क, कचरा, गड्ढा, जलभराव आदि) की पहचान करें और बताएं कि इसके समाधान के लिए किस सरकारी विभाग से संपर्क करना चाहिए और क्या कदम उठाने चाहिए। हिंदी में उत्तर दें।");
+      final prompt = TextPart("इस तस्वीर में दिखाई गई नागरिक समस्या की पहचान करें। इसके बाद इसे सही सरकारी विभाग में भेजने के लिए उपयोगकर्ता से जरूरी सवाल (जैसे किस वार्ड/इलाके की है) पूछें ताकि सही जगह शिकायत दर्ज हो सके। हिंदी में उत्तर दें।");
       final imagePart = DataPart('image/jpeg', imageBytes);
 
       final response = await model.generateContent([
         Content.multi([prompt, imagePart])
       ]);
 
+      String aiReply = response.text ?? "कृपया इस समस्या से जुड़ी लोकेशन और वार्ड नंबर बताएं।";
+
       setState(() {
         _isLoading = false;
-        _aiResponse = response.text ?? "विश्लेषण पूर्ण हुआ।";
+        _chatMessages.add({"role": "ai", "text": aiReply});
       });
 
       try {
-        await _flutterTts.speak(_aiResponse);
+        await _flutterTts.speak(aiReply);
       } catch (_) {}
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _aiResponse = "त्रुटि: कृपया इंटरनेट कनेक्शन या API Key जाँचें। ($e)";
+        _chatMessages.add({"role": "ai", "text": "त्रुटि: फोटो का विश्लेषण करने में असफल। ($e)"});
       });
     }
   }
 
-  Future<void> _sendTextToGemini(String prompt) async {
+  Future<void> _sendMessageToAI(String messageText) async {
+    if (messageText.trim().isEmpty) return;
+
+    _chatController.clear();
     setState(() {
+      _chatMessages.add({"role": "user", "text": messageText});
       _isLoading = true;
-      _aiResponse = "Gemini AI सोच रहा है...";
     });
 
     try {
-      final model = GenerativeModel(
-        model: 'gemini-1.5-flash',
-        apiKey: _geminiApiKey.isNotEmpty ? _geminiApiKey : "YOUR_API_KEY",
-      );
-
-      final response = await model.generateContent([Content.text("आप एक सरकारी नागरिक सहायक (Sahayak AI) हैं। उपयोगकर्ता की इस समस्या का सटीक समाधान और संबंधित विभाग का नाम हिंदी में बताएं: $prompt")]);
+      String aiReply;
+      if (_chatSession != null) {
+        final response = await _chatSession!.sendMessage(Content.text(messageText));
+        aiReply = response.text ?? "कृपया अधिक जानकारी दें ताकि सही विभाग को सूचित किया जा सके।";
+      } else {
+        aiReply = "सत्र सक्रिय नहीं है। कृपया ऐप रीस्टार्ट करें।";
+      }
 
       setState(() {
         _isLoading = false;
-        _aiResponse = response.text ?? "उत्तर नहीं मिला।";
+        _chatMessages.add({"role": "ai", "text": aiReply});
       });
 
       try {
-        await _flutterTts.speak(_aiResponse);
+        await _flutterTts.speak(aiReply);
       } catch (_) {}
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _aiResponse = "त्रुटि: $e";
+        _chatMessages.add({"role": "ai", "text": "त्रुटि: $e"});
       });
     }
   }
@@ -322,41 +346,36 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sahayak AI - Live Dashboard'),
+        title: const Text('Sahayak AI - Smart Q&A Assistant'),
         backgroundColor: const Color(0xFF1E293B),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Center(
-              child: GestureDetector(
-                onTap: _listen,
-                child: Container(
-                  width: 75,
-                  height: 75,
-                  decoration: BoxDecoration(
-                    color: _isListening ? Colors.redAccent : const Color(0xFF2563EB),
-                    shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.4), blurRadius: 10, spreadRadius: 3)],
-                  ),
-                  child: Icon(_isListening ? Icons.mic : Icons.mic_none, color: Colors.white, size: 36),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(_isListening ? "सुन रहा हूँ..." : "बोलने के लिए माइक टैप करें", style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
-            const SizedBox(height: 15),
-            Row(
+      body: Column(
+        children: [
+          // टॉप पर माइक और कैमरा शॉर्टकट
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                GestureDetector(
+                  onTap: _listen,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _isListening ? Colors.redAccent : const Color(0xFF2563EB),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(_isListening ? Icons.mic : Icons.mic_none, color: Colors.white, size: 28),
+                  ),
+                ),
+                const SizedBox(width: 20),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D9488)),
                   onPressed: () => _pickImageAndAnalyze(ImageSource.camera),
                   icon: const Icon(Icons.camera_alt, size: 16),
                   label: const Text('Camera'),
                 ),
-                const SizedBox(width: 15),
+                const SizedBox(width: 10),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
                   onPressed: () => _pickImageAndAnalyze(ImageSource.gallery),
@@ -365,49 +384,82 @@ class _MainDashboardState extends State<MainDashboard> {
                 ),
               ],
             ),
-            const SizedBox(height: 15),
-            if (_selectedImage != null)
-              Container(
-                height: 100,
-                width: 100,
-                margin: const EdgeInsets.only(bottom: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  image: DecorationImage(image: FileImage(_selectedImage!), fit: BoxFit.cover),
-                ),
-              ),
+          ),
+          if (_selectedImage != null)
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(8)),
-              child: Text("इनपुट: $_statusText", style: const TextStyle(fontSize: 13, color: Colors.amber)),
+              height: 70,
+              width: 70,
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                image: DecorationImage(image: FileImage(_selectedImage!), fit: BoxFit.cover),
+              ),
             ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF334155)),
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('🧠 Gemini AI Response & Routing:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8))),
-                      const SizedBox(height: 10),
-                      _isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : Text(_aiResponse, style: const TextStyle(fontSize: 13, color: Colors.white, height: 1.4)),
-                    ],
+          // चैट और Q&A इतिहास सूची
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: _chatMessages.length,
+              itemBuilder: (context, index) {
+                final msg = _chatMessages[index];
+                bool isAi = msg["role"] == "ai";
+                return Align(
+                  alignment: isAi ? Alignment.centerLeft : Alignment.centerRight,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    padding: const EdgeInsets.all(12),
+                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                    decoration: BoxDecoration(
+                      color: isAi ? const Color(0xFF1E293B) : const Color(0xFF2563EB),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: isAi ? const Color(0xFF334155) : Colors.transparent),
+                    ),
+                    child: Text(
+                      msg["text"]!,
+                      style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.3),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: CircularProgressIndicator(),
+            ),
+          // नीचे टेक्स्ट इनपुट और भेजने का बटन
+          Container(
+            padding: const EdgeInsets.all(8.0),
+            color: const Color(0xFF0F172A),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _chatController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'अपनी समस्या या जवाब यहाँ लिखें...',
+                      hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                      filled: true,
+                      fillColor: const Color(0xFF1E293B),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  backgroundColor: const Color(0xFF2563EB),
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white, size: 18),
+                    onPressed: () => _sendMessageToAI(_chatController.text),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
