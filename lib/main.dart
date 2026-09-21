@@ -1,5 +1,5 @@
 // ============================================================================
-//  Sahayak AI — Final Production Version (100% Error-Free Build)
+//  Sahayak AI — Permanent API Key Persistence & Gemini 3.6 Flash
 // ============================================================================
 
 import 'dart:async';
@@ -117,8 +117,8 @@ class Complaint {
 }
 
 class LocalStore {
-  static const String _sessionsKey = 'sahayak_chat_sessions_v19';
-  static const String _complaintsKey = 'sahayak_complaints_v19';
+  static const String _sessionsKey = 'sahayak_chat_sessions_v20';
+  static const String _complaintsKey = 'sahayak_complaints_v20';
   static const String _apiKeyStore = 'gemini_user_api_key';
 
   static Future<String?> getSavedApiKey() async {
@@ -248,8 +248,47 @@ class SahayakApp extends StatelessWidget {
         scaffoldBackgroundColor: AppColors.bg,
         colorScheme: const ColorScheme.dark(primary: AppColors.primary, secondary: AppColors.highlight, surface: AppColors.card),
       ),
-      home: const ApiKeyWrapper(),
+      // ⚡ यहाँ ऐप शुरू होते ही चेक किया जाता है कि API Key सेव है या नहीं
+      home: const RootScreenChecker(),
     );
+  }
+}
+
+class RootScreenChecker extends StatefulWidget {
+  const RootScreenChecker({super.key});
+
+  @override
+  State<RootScreenChecker> createState() => _RootScreenCheckerState();
+}
+
+class _RootScreenCheckerState extends State<RootScreenChecker> {
+  bool _loading = true;
+  bool _hasKey = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkKey();
+  }
+
+  Future<void> _checkKey() async {
+    final key = await LocalStore.getSavedApiKey();
+    if (!mounted) return;
+    setState(() {
+      _hasKey = (key != null && key.isNotEmpty);
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: AppColors.highlight)),
+      );
+    }
+    // अगर की पहले से सेव है तो सीधे HomeShell खुलेगा, वरना Key मांगने वाला पेज खुलेगा
+    return _hasKey ? const HomeShell() : const ApiKeyWrapper();
   }
 }
 
