@@ -1,5 +1,5 @@
 // ============================================================================
-//  Sahayak AI — Secure App with Mic (Speech-to-Text), Camera, Gallery, TTS & Gemini
+//  Sahayak AI — Secure Production App with Fixed API Key Reset & Gemini Brain
 // ============================================================================
 
 import 'dart:async';
@@ -69,8 +69,8 @@ class Complaint {
 }
 
 class LocalStore {
-  static const String _chatKey = 'sahayak_chat_v8';
-  static const String _complaintsKey = 'sahayak_complaints_v8';
+  static const String _chatKey = 'sahayak_chat_v9';
+  static const String _complaintsKey = 'sahayak_complaints_v9';
   static const String _apiKeyStore = 'gemini_user_api_key';
 
   static Future<String?> getSavedApiKey() async {
@@ -81,6 +81,11 @@ class LocalStore {
   static Future<void> saveApiKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_apiKeyStore, key.trim());
+  }
+
+  static Future<void> clearApiKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_apiKeyStore);
   }
 
   static Future<List<ChatMessage>> loadChat() async {
@@ -126,7 +131,7 @@ class GeminiService {
   static Future<String> getGeminiResponse(String userPrompt, {String? imagePath}) async {
     final apiKey = await LocalStore.getSavedApiKey();
     if (apiKey == null || apiKey.isEmpty) {
-      return "⚠️ कृपया सेटिंग्स में जाकर अपनी Gemini API Key दर्ज करें ताकि एआई काम कर सके।";
+      return "⚠️ कृपया ऊपरी कोने में दिए गए चाबी (Key) आइकॉन पर क्लिक करके अपनी सही Gemini API Key दर्ज करें।";
     }
 
     try {
@@ -155,7 +160,7 @@ class GeminiService {
         return response.text ?? "उत्तर प्राप्त नहीं हुआ।";
       }
     } catch (e) {
-      return "एआई कनेक्शन में त्रुटि: कृपया अपनी API Key की जाँच करें।";
+      return "एआई कनेक्शन में त्रुटि: आपकी API Key अमान्य हो सकती है। कृपया दूसरी Key दर्ज करें।";
     }
   }
 }
@@ -237,7 +242,7 @@ class _ApiKeyWrapperState extends State<ApiKeyWrapper> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'सुरक्षा के लिए कोड में API Key नहीं रखी गई है। कृपया ऐप शुरू करने के लिए अपनी Gemini API Key यहाँ दर्ज करें:',
+                'सुरक्षा के लिए कोड में API Key नहीं है। Google AI Studio से अपनी फ्री Gemini API Key यहाँ दर्ज करें:',
                 style: TextStyle(fontSize: 15, height: 1.4),
                 textAlign: TextAlign.center,
               ),
@@ -327,7 +332,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     }
   }
 
-  // माइक से बोलकर टाइप करने का फंक्शन
   Future<void> _listenVoice() async {
     if (!_isListening) {
       bool available = await _speech.initialize(
@@ -341,7 +345,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
       if (available) {
         setState(() => _isListening = true);
         _speech.listen(
-          localeId: 'hi_IN', // हिंदी स्पीच रिकग्निशन
+          localeId: 'hi_IN',
           onResult: (val) => setState(() {
             _inputController.text = val.recognizedWords;
           }),
@@ -450,14 +454,13 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     if (_booting) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sahayak AI (Mic & Secure)'),
+        title: const Text('Sahayak AI'),
         actions: [
           IconButton(
             icon: const Icon(Icons.key_rounded),
-            tooltip: 'Change API Key',
+            tooltip: 'Reset/Change API Key',
             onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.remove('gemini_user_api_key');
+              await LocalStore.clearApiKey();
               if (mounted) {
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ApiKeyWrapper()));
               }
@@ -572,7 +575,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                 padding: const EdgeInsets.all(8.0),
                 child: Row(
                   children: [
-                    // माइक बटन
                     IconButton(
                       icon: Icon(
                         _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
