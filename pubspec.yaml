@@ -23,3 +23,14 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  image_picker: ^1.1.2
+  shared_preferences: ^2.2.3
+  path_provider: ^2.1.4
+  flutter_tts: ^4.0.2
+  google_generative_ai: ^0.4.6
+  speech_to_text: ^6.6.1
