@@ -1,5 +1,5 @@
 // ============================================================================
-//  Sahayak AI — Secure Production App with Fixed API Key Reset & Gemini Brain
+//  Sahayak AI — Final Production Secure App with Instant Navigation Fix
 // ============================================================================
 
 import 'dart:async';
@@ -69,8 +69,8 @@ class Complaint {
 }
 
 class LocalStore {
-  static const String _chatKey = 'sahayak_chat_v9';
-  static const String _complaintsKey = 'sahayak_complaints_v9';
+  static const String _chatKey = 'sahayak_chat_v10';
+  static const String _complaintsKey = 'sahayak_complaints_v10';
   static const String _apiKeyStore = 'gemini_user_api_key';
 
   static Future<String?> getSavedApiKey() async {
@@ -199,76 +199,72 @@ class ApiKeyWrapper extends StatefulWidget {
 }
 
 class _ApiKeyWrapperState extends State<ApiKeyWrapper> {
-  bool _isLoading = true;
-  bool _hasKey = false;
   final TextEditingController _keyController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _checkKey();
-  }
-
-  Future<void> _checkKey() async {
-    final key = await LocalStore.getSavedApiKey();
-    setState(() {
-      _hasKey = key != null && key.isNotEmpty;
-      _isLoading = false;
-    });
-  }
+  bool _saving = false;
 
   Future<void> _saveAndProceed() async {
     final text = _keyController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('कृपया अपनी API Key दर्ज करें!')),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
     await LocalStore.saveApiKey(text);
-    setState(() {
-      _hasKey = true;
-    });
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeShell()),
+    );
+  }
+
+  @override
+  void dispose() {
+    _keyController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    if (!_hasKey) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Enter Gemini API Key')),
-        body: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'सुरक्षा के लिए कोड में API Key नहीं है। Google AI Studio से अपनी फ्री Gemini API Key यहाँ दर्ज करें:',
-                style: TextStyle(fontSize: 15, height: 1.4),
-                textAlign: TextAlign.center,
+    return Scaffold(
+      appBar: AppBar(title: const Text('Enter Gemini API Key')),
+      body: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'सुरक्षा के लिए कोड में API Key नहीं है। Google AI Studio से अपनी फ्री Gemini API Key यहाँ दर्ज करें:',
+              style: TextStyle(fontSize: 15, height: 1.4),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _keyController,
+              obscureText: true, // एपीआई की सुरक्षित रूप से छुपकर दिखेगी
+              decoration: const InputDecoration(
+                labelText: 'Gemini API Key',
+                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: AppColors.card,
               ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _keyController,
-                decoration: const InputDecoration(
-                  labelText: 'Gemini API Key',
-                  border: OutlineInputBorder(),
-                  filled: true,
-                  fillColor: AppColors.card,
-                ),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, padding: const EdgeInsets.all(14)),
-                onPressed: _saveAndProceed,
-                child: const Text('Save & Start App', style: TextStyle(color: Colors.white, fontSize: 16)),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, padding: const EdgeInsets.all(14)),
+              onPressed: _saving ? null : _saveAndProceed,
+              child: _saving
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text('Save & Start App', style: TextStyle(color: Colors.white, fontSize: 16)),
+            ),
+          ],
         ),
-      );
-    }
-
-    return const HomeShell();
+      ),
+    );
   }
 }
 
@@ -458,7 +454,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
         actions: [
           IconButton(
             icon: const Icon(Icons.key_rounded),
-            tooltip: 'Reset/Change API Key',
+            tooltip: 'Change API Key',
             onPressed: () async {
               await LocalStore.clearApiKey();
               if (mounted) {
