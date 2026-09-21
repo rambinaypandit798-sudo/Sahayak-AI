@@ -1,5 +1,5 @@
 // ============================================================================
-//  Sahayak AI — Final Production Version with Side Drawer & New Chat Management
+//  Sahayak AI — Final Production Version with Gemini 2.5 Flash Model
 // ============================================================================
 
 import 'dart:async';
@@ -117,8 +117,8 @@ class Complaint {
 }
 
 class LocalStore {
-  static const String _sessionsKey = 'sahayak_chat_sessions_v15';
-  static const String _complaintsKey = 'sahayak_complaints_v15';
+  static const String _sessionsKey = 'sahayak_chat_sessions_v17';
+  static const String _complaintsKey = 'sahayak_complaints_v17';
   static const String _apiKeyStore = 'gemini_user_api_key';
 
   static Future<String?> getSavedApiKey() async {
@@ -197,8 +197,9 @@ class GeminiService {
     }
 
     try {
+      // ⚡ यहाँ Gemini 2.5 Flash मॉडल सेट किया गया है
       final model = GenerativeModel(
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         apiKey: apiKey,
         systemInstruction: Content.text(
           "आप 'Sahayak AI' हैं—एक बुद्धिमान नागरिक और छात्र सहायक (Civic & Student Assistant)। "
@@ -462,7 +463,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     });
     LocalStore.saveSessions(_sessions);
     if (!initial && Navigator.canPop(context)) {
-      Navigator.pop(context); // ड्रॉवर बंद करें
+      Navigator.pop(context);
     }
   }
 
