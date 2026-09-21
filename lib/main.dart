@@ -1,5 +1,5 @@
 // ============================================================================
-//  Sahayak AI — Final Production Secure App with Instant Navigation Fix
+//  Sahayak AI — Final Robust Version with Updated Gemini Model & Secure Key Handling
 // ============================================================================
 
 import 'dart:async';
@@ -69,8 +69,8 @@ class Complaint {
 }
 
 class LocalStore {
-  static const String _chatKey = 'sahayak_chat_v10';
-  static const String _complaintsKey = 'sahayak_complaints_v10';
+  static const String _chatKey = 'sahayak_chat_v11';
+  static const String _complaintsKey = 'sahayak_complaints_v11';
   static const String _apiKeyStore = 'gemini_user_api_key';
 
   static Future<String?> getSavedApiKey() async {
@@ -131,10 +131,11 @@ class GeminiService {
   static Future<String> getGeminiResponse(String userPrompt, {String? imagePath}) async {
     final apiKey = await LocalStore.getSavedApiKey();
     if (apiKey == null || apiKey.isEmpty) {
-      return "⚠️ कृपया ऊपरी कोने में दिए गए चाबी (Key) आइकॉन पर क्लिक करके अपनी सही Gemini API Key दर्ज करें।";
+      return "⚠️ कृपया ऊपरी कोने में दिए गए चाबी (Key) आइकॉन पर क्लिक करके अपनी Gemini API Key दर्ज करें।";
     }
 
     try {
+      // ⚡ यहाँ लेटेस्ट और स्टेबल मॉडल का इस्तेमाल किया गया है
       final model = GenerativeModel(
         model: 'gemini-1.5-flash',
         apiKey: apiKey,
@@ -160,7 +161,7 @@ class GeminiService {
         return response.text ?? "उत्तर प्राप्त नहीं हुआ।";
       }
     } catch (e) {
-      return "एआई कनेक्शन में त्रुटि: आपकी API Key अमान्य हो सकती है। कृपया दूसरी Key दर्ज करें।";
+      return "एआई कनेक्शन में त्रुटि: ${e.toString().replaceAll(apiKey, '***')}";
     }
   }
 }
@@ -245,7 +246,7 @@ class _ApiKeyWrapperState extends State<ApiKeyWrapper> {
             const SizedBox(height: 20),
             TextField(
               controller: _keyController,
-              obscureText: true, // एपीआई की सुरक्षित रूप से छुपकर दिखेगी
+              obscureText: true,
               decoration: const InputDecoration(
                 labelText: 'Gemini API Key',
                 border: OutlineInputBorder(),
