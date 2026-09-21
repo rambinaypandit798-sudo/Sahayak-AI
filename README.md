@@ -5,8 +5,10 @@
 
 [![Flutter Framework](https://img.shields.io/badge/Framework-Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
 [![Gemini 3.6 Flash](https://img.shields.io/badge/AI_Engine-Gemini_3.6_Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://aistudio.google.com)
-[![Platform](https://img.shields.io/badge/Platform-Android_%7C_iOS-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/rambinaypandit798-sudo/Sahayak-AI/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+### **👨‍💻 Developed by Ram Binay Kumar Pandit**
+[![GitHub Profile](https://img.shields.io/badge/GitHub-rambinaypandit798--sudo-black?style=for-the-badge&logo=github)](https://github.com/rambinaypandit798-sudo)
+[![LinkedIn Profile](https://img.shields.io/badge/LinkedIn-Connect-blue?style=for-the-badge&logo=linkedin)](https://www.linkedin.com/in/ram-binay-kumar-pandit-445aa6405)
 
 </div>
 
