@@ -1,5 +1,5 @@
 // ============================================================================
-//  Sahayak AI — Secure Production App with Dynamic API Key Setup & Gemini Brain
+//  Sahayak AI — Secure App with Mic (Speech-to-Text), Camera, Gallery, TTS & Gemini
 // ============================================================================
 
 import 'dart:async';
@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 class AppColors {
   AppColors._();
@@ -68,8 +69,8 @@ class Complaint {
 }
 
 class LocalStore {
-  static const String _chatKey = 'sahayak_chat_secure';
-  static const String _complaintsKey = 'sahayak_complaints_secure';
+  static const String _chatKey = 'sahayak_chat_v8';
+  static const String _complaintsKey = 'sahayak_complaints_v8';
   static const String _apiKeyStore = 'gemini_user_api_key';
 
   static Future<String?> getSavedApiKey() async {
@@ -185,7 +186,6 @@ class SahayakApp extends StatelessWidget {
   }
 }
 
-// पहली बार API Key मांगने के लिए रैपर स्क्रीन
 class ApiKeyWrapper extends StatefulWidget {
   const ApiKeyWrapper({super.key});
 
@@ -278,11 +278,13 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   late final TabController _tabController;
   final TextEditingController _inputController = TextEditingController();
   final FlutterTts _flutterTts = FlutterTts();
+  final stt.SpeechToText _speech = stt.SpeechToText();
 
   final List<ChatMessage> _messages = [];
   final List<Complaint> _complaints = [];
   bool _booting = true;
   bool _aiTyping = false;
+  bool _isListening = false;
   String? _currentlySpeakingId;
   int _idSeed = 0;
 
@@ -325,11 +327,38 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     }
   }
 
+  // माइक से बोलकर टाइप करने का फंक्शन
+  Future<void> _listenVoice() async {
+    if (!_isListening) {
+      bool available = await _speech.initialize(
+        onStatus: (val) {
+          if (val == 'notListening' || val == 'done') {
+            setState(() => _isListening = false);
+          }
+        },
+        onError: (_) => setState(() => _isListening = false),
+      );
+      if (available) {
+        setState(() => _isListening = true);
+        _speech.listen(
+          localeId: 'hi_IN', // हिंदी स्पीच रिकग्निशन
+          onResult: (val) => setState(() {
+            _inputController.text = val.recognizedWords;
+          }),
+        );
+      }
+    } else {
+      setState(() => _isListening = false);
+      _speech.stop();
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
     _inputController.dispose();
     _flutterTts.stop();
+    _speech.stop();
     super.dispose();
   }
 
@@ -343,7 +372,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
       if (_messages.isEmpty) {
         _messages.add(ChatMessage(
           id: 'welcome',
-          text: 'नमस्ते 🙏 मैं Sahayak AI हूँ। आप ऊपर दिए गए कैमरा या गैलरी बटन से फोटो अपलोड कर सकते हैं, या अपनी समस्या पूछ सकते हैं।',
+          text: 'नमस्ते 🙏 मैं Sahayak AI हूँ। आप फोटो अपलोड कर सकते हैं, माइक बटन दबाकर बोलकर सवाल पूछ सकते हैं, या टाइप कर सकते हैं।',
           isUser: false,
           timestamp: DateTime.now().millisecondsSinceEpoch,
         ));
@@ -421,7 +450,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     if (_booting) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sahayak AI (Secure)'),
+        title: const Text('Sahayak AI (Mic & Secure)'),
         actions: [
           IconButton(
             icon: const Icon(Icons.key_rounded),
@@ -543,15 +572,24 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                 padding: const EdgeInsets.all(8.0),
                 child: Row(
                   children: [
+                    // माइक बटन
+                    IconButton(
+                      icon: Icon(
+                        _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                        color: _isListening ? Colors.redAccent : AppColors.highlight,
+                      ),
+                      onPressed: _listenVoice,
+                      tooltip: 'बोलकर सवाल पूछें',
+                    ),
                     Expanded(
                       child: TextField(
                         controller: _inputController,
-                        decoration: const InputDecoration(
-                          hintText: 'अपनी समस्या या सवाल पूछें...',
+                        decoration: InputDecoration(
+                          hintText: _isListening ? 'सुन रहे हैं... बोलिए...' : 'अपनी समस्या या सवाल पूछें...',
                           filled: true,
                           fillColor: AppColors.card,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(20)), borderSide: BorderSide.none),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(20)), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         ),
                         onSubmitted: (_) => _handleSend(),
                       ),
