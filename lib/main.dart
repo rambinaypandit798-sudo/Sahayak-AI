@@ -1,5 +1,5 @@
 // ============================================================================
-//  Sahayak AI — Final Production Version with Escalation & Remainder Features
+//  Sahayak AI — Final Production Version with Side Drawer & New Chat Management
 // ============================================================================
 
 import 'dart:async';
@@ -42,6 +42,28 @@ class ChatMessage {
   );
 }
 
+class ChatSession {
+  ChatSession({required this.sessionId, required this.title, required this.messages, required this.timestamp});
+  final String sessionId;
+  String title;
+  List<ChatMessage> messages;
+  final int timestamp;
+
+  Map<String, dynamic> toJson() => {
+        'sessionId': sessionId,
+        'title': title,
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'timestamp': timestamp,
+      };
+
+  static ChatSession fromJson(Map<String, dynamic> json) => ChatSession(
+        sessionId: json['sessionId'] ?? '',
+        title: json['title'] ?? 'नई चैट',
+        messages: (json['messages'] as List?)?.map((e) => ChatMessage.fromJson(e)).toList() ?? [],
+        timestamp: json['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
+      );
+}
+
 class Complaint {
   Complaint({
     required this.id,
@@ -63,7 +85,7 @@ class Complaint {
   final String details;
   final String ward;
   final int timestamp;
-  String status; // बदला जा सकता है (जैसे Escalated)
+  String status;
   final String deadline;
   final String? imagePath;
 
@@ -95,8 +117,8 @@ class Complaint {
 }
 
 class LocalStore {
-  static const String _chatKey = 'sahayak_chat_v12';
-  static const String _complaintsKey = 'sahayak_complaints_v12';
+  static const String _sessionsKey = 'sahayak_chat_sessions_v15';
+  static const String _complaintsKey = 'sahayak_complaints_v15';
   static const String _apiKeyStore = 'gemini_user_api_key';
 
   static Future<String?> getSavedApiKey() async {
@@ -114,22 +136,22 @@ class LocalStore {
     await prefs.remove(_apiKeyStore);
   }
 
-  static Future<List<ChatMessage>> loadChat() async {
+  static Future<List<ChatSession>> loadSessions() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_chatKey);
+      final raw = prefs.getString(_sessionsKey);
       if (raw == null) return [];
       List decoded = jsonDecode(raw);
-      return decoded.map((e) => ChatMessage.fromJson(e)).toList();
+      return decoded.map((e) => ChatSession.fromJson(e)).toList();
     } catch (_) {
       return [];
     }
   }
 
-  static Future<void> saveChat(List<ChatMessage> list) async {
+  static Future<void> saveSessions(List<ChatSession> list) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_chatKey, jsonEncode(list.map((e) => e.toJson()).toList()));
+      await prefs.setString(_sessionsKey, jsonEncode(list.map((e) => e.toJson()).toList()));
     } catch (_) {}
   }
 
@@ -138,7 +160,6 @@ class LocalStore {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_complaintsKey);
       if (raw == null) {
-        // डिफ़ॉल्ट सैंपल शिकायत ताकि ऐप खाली न लगे
         return [
           Complaint(
             id: 'c1',
@@ -187,7 +208,7 @@ class GeminiService {
 
       if (imagePath != null && File(imagePath).existsSync()) {
         final imageBytes = await File(imagePath).readAsBytes();
-        final prompt = TextPart(userPrompt.isEmpty ? "इस फोटो को analyse करके बताएं कि यह किस प्रकार की समस्या है और इसे किस विभाग को भेजा जाना चाहिए।" : userPrompt);
+        final prompt = TextPart(userPrompt.isEmpty ? "इस फोटो को analyse करके बताएं कि यह किस प्रकार की नागरिक समस्या है और इसे किस विभाग को भेजा जाना चाहिए।" : userPrompt);
         final imagePart = DataPart('image/jpeg', imageBytes);
 
         final response = await model.generateContent([
@@ -322,7 +343,8 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   final FlutterTts _flutterTts = FlutterTts();
   final stt.SpeechToText _speech = stt.SpeechToText();
 
-  final List<ChatMessage> _messages = [];
+  List<ChatSession> _sessions = [];
+  ChatSession? _currentSession;
   final List<Complaint> _complaints = [];
   bool _booting = true;
   bool _aiTyping = false;
@@ -404,25 +426,48 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   }
 
   Future<void> _bootstrap() async {
-    final chat = await LocalStore.loadChat();
+    final loadedSessions = await LocalStore.loadSessions();
     final comps = await LocalStore.loadComplaints();
     if (!mounted) return;
     setState(() {
-      _messages.addAll(chat);
+      _sessions.addAll(loadedSessions);
       _complaints.addAll(comps);
-      if (_messages.isEmpty) {
-        _messages.add(ChatMessage(
-          id: 'welcome',
-          text: 'नमस्ते 🙏 मैं Sahayak AI हूँ। आप फोटो अपलोड कर सकते हैं, माइक बटन दबाकर बोलकर सवाल पूछ सकते हैं, या टाइप कर सकते हैं।',
-          isUser: false,
-          timestamp: DateTime.now().millisecondsSinceEpoch,
-        ));
+      if (_sessions.isEmpty) {
+        _createNewChatSession(initial: true);
+      } else {
+        _currentSession = _sessions.first;
       }
       _booting = false;
     });
   }
 
+  void _createNewChatSession({bool initial = false}) {
+    final newSession = ChatSession(
+      sessionId: 'session_${DateTime.now().millisecondsSinceEpoch}',
+      title: 'चैट #${_sessions.length + 1}',
+      messages: [
+        ChatMessage(
+          id: 'welcome_${DateTime.now().millisecondsSinceEpoch}',
+          text: 'नमस्ते 🙏 मैं Sahayak AI हूँ। आप फोटो अपलोड कर सकते हैं, माइक बटन दबाकर बोलकर सवाल पूछ सकते हैं, या टाइप कर सकते हैं।',
+          isUser: false,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+        )
+      ],
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    setState(() {
+      _sessions.insert(0, newSession);
+      _currentSession = newSession;
+    });
+    LocalStore.saveSessions(_sessions);
+    if (!initial && Navigator.canPop(context)) {
+      Navigator.pop(context); // ड्रॉवर बंद करें
+    }
+  }
+
   Future<void> _pickAndUploadImage(ImageSource source) async {
+    if (_currentSession == null) return;
     try {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: source, imageQuality: 70);
@@ -436,21 +481,19 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
 
       final userMsgId = 'user_img_${DateTime.now().millisecondsSinceEpoch}_${++_idSeed}';
       setState(() {
-        _messages.add(ChatMessage(
+        _currentSession!.messages.add(ChatMessage(
           id: userMsgId,
-          text: '[फोटो अपलोड की गई - शिकायत दर्ज की जा रही है]',
+          text: '[फोटो अपलोड की गई - एआई विश्लेषण जारी है]',
           isUser: true,
           timestamp: DateTime.now().millisecondsSinceEpoch,
           imagePath: target,
         ));
         _aiTyping = true;
       });
-      LocalStore.saveChat(_messages);
+      LocalStore.saveSessions(_sessions);
 
-      // AI विश्लेषण और स्वचालित शिकायत बनाना
-      final aiReplyText = await GeminiService.getGeminiResponse("इस फोटो को analyse करें और बताएं कि यह किस प्रकार की नागरिक समस्या है।", imagePath: target);
+      final aiReplyText = await GeminiService.getGeminiResponse("इस फोटो को analyse करके बताएं कि यह किस प्रकार की नागरिक समस्या है और इसे किस विभाग को भेजा जाना चाहिए।", imagePath: target);
       
-      // नई शिकायत ऑटोमैटिक जोड़ें
       final newComp = Complaint(
         id: 'comp_${DateTime.now().millisecondsSinceEpoch}',
         ticketId: 'SAH-${1000 + _complaints.length}',
@@ -466,7 +509,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
 
       setState(() {
         _complaints.insert(0, newComp);
-        _messages.add(ChatMessage(
+        _currentSession!.messages.add(ChatMessage(
           id: 'ai_img_${DateTime.now().millisecondsSinceEpoch}',
           text: '✅ आपकी शिकायत सफलतापूर्वक दर्ज कर ली गई है!\n\nटिकट आईडी: ${newComp.ticketId}\nएआई विश्लेषण: $aiReplyText\n\nआप इसे "My Complaints" टैब में ट्रैक कर सकते हैं।',
           isUser: false,
@@ -475,7 +518,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
         _aiTyping = false;
       });
 
-      LocalStore.saveChat(_messages);
+      LocalStore.saveSessions(_sessions);
       LocalStore.saveComplaints(_complaints);
     } catch (_) {
       setState(() => _aiTyping = false);
@@ -483,35 +526,41 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   }
 
   Future<void> _handleSend() async {
+    if (_currentSession == null) return;
     final text = _inputController.text.trim();
     if (text.isEmpty || _aiTyping) return;
     _inputController.clear();
 
+    if (_currentSession!.messages.length <= 1) {
+      _currentSession!.title = text.length > 20 ? '${text.substring(0, 20)}...' : text;
+    }
+
     final userMsgId = 'user_${DateTime.now().millisecondsSinceEpoch}_${++_idSeed}';
     setState(() {
-      _messages.add(ChatMessage(id: userMsgId, text: text, isUser: true, timestamp: DateTime.now().millisecondsSinceEpoch));
+      _currentSession!.messages.add(ChatMessage(id: userMsgId, text: text, isUser: true, timestamp: DateTime.now().millisecondsSinceEpoch));
       _aiTyping = true;
     });
-    LocalStore.saveChat(_messages);
+    LocalStore.saveSessions(_sessions);
 
     final aiReplyText = await GeminiService.getGeminiResponse(text);
     final aiMsgId = 'ai_${DateTime.now().millisecondsSinceEpoch}_${++_idSeed}';
 
     if (!mounted) return;
     setState(() {
-      _messages.add(ChatMessage(id: aiMsgId, text: aiReplyText, isUser: false, timestamp: DateTime.now().millisecondsSinceEpoch));
+      _currentSession!.messages.add(ChatMessage(id: aiMsgId, text: aiReplyText, isUser: false, timestamp: DateTime.now().millisecondsSinceEpoch));
       _aiTyping = false;
     });
-    LocalStore.saveChat(_messages);
+    LocalStore.saveSessions(_sessions);
     _speakText(aiMsgId, aiReplyText);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_booting) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_booting || _currentSession == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sahayak AI'),
+        title: Text(_currentSession!.title),
         actions: [
           IconButton(
             icon: const Icon(Icons.key_rounded),
@@ -529,6 +578,57 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
           tabs: const [
             Tab(text: 'AI Assistant'),
             Tab(text: 'My Complaints'),
+          ],
+        ),
+      ),
+      drawer: Drawer(
+        backgroundColor: AppColors.bg,
+        child: Column(
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(color: AppColors.card),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.support_agent, size: 40, color: AppColors.highlight),
+                    SizedBox(height: 8),
+                    Text('Sahayak AI - चैट इतिहास', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(10.0),
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, minimumSize: const Size(double.infinity, 45)),
+                onPressed: () => _createNewChatSession(),
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const Text('➕ नया चैट शुरू करें (New Chat)', style: TextStyle(color: Colors.white)),
+              ),
+            ),
+            const Divider(color: AppColors.border),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _sessions.length,
+                itemBuilder: (context, index) {
+                  final session = _sessions[index];
+                  final bool isSelected = session.sessionId == _currentSession!.sessionId;
+                  return ListTile(
+                    selected: isSelected,
+                    selectedTileColor: AppColors.primary.withOpacity(0.2),
+                    leading: const Icon(Icons.chat_bubble_outline, color: AppColors.highlight, size: 20),
+                    title: Text(session.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
+                    onTap: () {
+                      setState(() {
+                        _currentSession = session;
+                      });
+                      Navigator.pop(context);
+                    },
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
@@ -561,12 +661,12 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.all(12),
-                  itemCount: _messages.length + (_aiTyping ? 1 : 0),
+                  itemCount: _currentSession!.messages.length + (_aiTyping ? 1 : 0),
                   itemBuilder: (context, index) {
-                    if (index >= _messages.length) {
+                    if (index >= _currentSession!.messages.length) {
                       return const ListTile(title: Text('Gemini AI is thinking...'));
                     }
-                    final msg = _messages[index];
+                    final msg = _currentSession!.messages[index];
                     final bool isSpeaking = _currentlySpeakingId == msg.id;
 
                     return Align(
@@ -700,7 +800,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              // Remind Button
                               OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.highlight)),
                                 onPressed: () {
@@ -712,7 +811,6 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                                 label: const Text('Remind', style: TextStyle(fontSize: 12, color: AppColors.highlight)),
                               ),
                               const SizedBox(width: 8),
-                              // Escalate Button
                               ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade800),
                                 onPressed: () {
