@@ -17,7 +17,24 @@
 
 ---
 
-## 📱 Core Features
+## 📱 App Screenshots (UI Preview)
+
+<div align="center">
+  <table width="100%">
+    <tr>
+      <td align="center" width="50%"><b>AI Assistant & Chat Interface</b></td>
+      <td align="center" width="50%"><b>Live Complaint Tracking</b></td>
+    </tr>
+    <tr>
+      <td align="center"><img src="screenshots/chat_screen.png" width="280" alt="Chat Screen"/></td>
+      <td align="center"><img src="screenshots/complaint_screen.png" width="280" alt="Complaints Screen"/></td>
+    </tr>
+  </table>
+</div>
+
+---
+
+## ✨ Core Features
 
 * **🤖 Multimodal AI Analysis:** Upload photos of civic grievances (potholes, garbage dumps, water leaks) via camera or gallery for instant AI evaluation using `gemini-3.6-flash`.
 * **🎫 Live Ticket Lifecycle:** Automatically generates unique tracking IDs (`SAH-XXXX`) with real-time status monitoring in the dedicated **'My Complaints'** module.
