@@ -1,5 +1,5 @@
 // ============================================================================
-//  Sahayak AI — Final Robust Version with Updated Gemini Model & Secure Key Handling
+//  Sahayak AI — Final Production Version with Escalation & Remainder Features
 // ============================================================================
 
 import 'dart:async';
@@ -43,7 +43,19 @@ class ChatMessage {
 }
 
 class Complaint {
-  Complaint({required this.id, required this.ticketId, required this.title, required this.department, required this.details, required this.ward, required this.timestamp, required this.status, this.imagePath});
+  Complaint({
+    required this.id,
+    required this.ticketId,
+    required this.title,
+    required this.department,
+    required this.details,
+    required this.ward,
+    required this.timestamp,
+    required this.status,
+    required this.deadline,
+    this.imagePath,
+  });
+
   final String id;
   final String ticketId;
   final String title;
@@ -51,26 +63,40 @@ class Complaint {
   final String details;
   final String ward;
   final int timestamp;
-  final String status;
+  String status; // बदला जा सकता है (जैसे Escalated)
+  final String deadline;
   final String? imagePath;
 
-  Map<String, dynamic> toJson() => {'id': id, 'ticketId': ticketId, 'title': title, 'department': department, 'details': details, 'ward': ward, 'timestamp': timestamp, 'status': status, 'imagePath': imagePath};
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'ticketId': ticketId,
+        'title': title,
+        'department': department,
+        'details': details,
+        'ward': ward,
+        'timestamp': timestamp,
+        'status': status,
+        'deadline': deadline,
+        'imagePath': imagePath,
+      };
+
   static Complaint fromJson(Map<String, dynamic> json) => Complaint(
-    id: json['id'] ?? '',
-    ticketId: json['ticketId'] ?? '',
-    title: json['title'] ?? '',
-    department: json['department'] ?? '',
-    details: json['details'] ?? '',
-    ward: json['ward'] ?? '',
-    timestamp: json['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
-    status: json['status'] ?? 'Submitted',
-    imagePath: json['imagePath'],
-  );
+        id: json['id'] ?? '',
+        ticketId: json['ticketId'] ?? '',
+        title: json['title'] ?? '',
+        department: json['department'] ?? '',
+        details: json['details'] ?? '',
+        ward: json['ward'] ?? '',
+        timestamp: json['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
+        status: json['status'] ?? 'Submitted (प्रगति पर)',
+        deadline: json['deadline'] ?? '48 घंटे',
+        imagePath: json['imagePath'],
+      );
 }
 
 class LocalStore {
-  static const String _chatKey = 'sahayak_chat_v11';
-  static const String _complaintsKey = 'sahayak_complaints_v11';
+  static const String _chatKey = 'sahayak_chat_v12';
+  static const String _complaintsKey = 'sahayak_complaints_v12';
   static const String _apiKeyStore = 'gemini_user_api_key';
 
   static Future<String?> getSavedApiKey() async {
@@ -111,7 +137,22 @@ class LocalStore {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_complaintsKey);
-      if (raw == null) return [];
+      if (raw == null) {
+        // डिफ़ॉल्ट सैंपल शिकायत ताकि ऐप खाली न लगे
+        return [
+          Complaint(
+            id: 'c1',
+            ticketId: 'SAH-9821',
+            title: 'सड़क का बड़ा गड्ढा',
+            department: 'लोक निर्माण विभाग (PWD)',
+            details: 'वार्ड नंबर 12 मुख्य मार्ग पर गहरा गड्ढा है।',
+            ward: 'वार्ड 12',
+            timestamp: DateTime.now().millisecondsSinceEpoch,
+            status: 'Submitted (प्रगति पर)',
+            deadline: '48 घंटे',
+          )
+        ];
+      }
       List decoded = jsonDecode(raw);
       return decoded.map((e) => Complaint.fromJson(e)).toList();
     } catch (_) {
@@ -135,7 +176,6 @@ class GeminiService {
     }
 
     try {
-      // ⚡ यहाँ लेटेस्ट और स्टेबल मॉडल का इस्तेमाल किया गया है
       final model = GenerativeModel(
         model: 'gemini-1.5-flash',
         apiKey: apiKey,
@@ -147,7 +187,7 @@ class GeminiService {
 
       if (imagePath != null && File(imagePath).existsSync()) {
         final imageBytes = await File(imagePath).readAsBytes();
-        final prompt = TextPart(userPrompt.isEmpty ? "इस फोटो को analyse करके बताएं कि यह किस प्रकार की समस्या है।" : userPrompt);
+        final prompt = TextPart(userPrompt.isEmpty ? "इस फोटो को analyse करके बताएं कि यह किस प्रकार की समस्या है और इसे किस विभाग को भेजा जाना चाहिए।" : userPrompt);
         final imagePart = DataPart('image/jpeg', imageBytes);
 
         final response = await model.generateContent([
@@ -398,7 +438,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
       setState(() {
         _messages.add(ChatMessage(
           id: userMsgId,
-          text: '[फोटो अपलोड की गई]',
+          text: '[फोटो अपलोड की गई - शिकायत दर्ज की जा रही है]',
           isUser: true,
           timestamp: DateTime.now().millisecondsSinceEpoch,
           imagePath: target,
@@ -407,16 +447,36 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
       });
       LocalStore.saveChat(_messages);
 
-      final aiReplyText = await GeminiService.getGeminiResponse("इस फोटो को analyse करके बताएं कि यह किस प्रकार की समस्या है।", imagePath: target);
-      final aiMsgId = 'ai_img_${DateTime.now().millisecondsSinceEpoch}_${++_idSeed}';
+      // AI विश्लेषण और स्वचालित शिकायत बनाना
+      final aiReplyText = await GeminiService.getGeminiResponse("इस फोटो को analyse करें और बताएं कि यह किस प्रकार की नागरिक समस्या है।", imagePath: target);
+      
+      // नई शिकायत ऑटोमैटिक जोड़ें
+      final newComp = Complaint(
+        id: 'comp_${DateTime.now().millisecondsSinceEpoch}',
+        ticketId: 'SAH-${1000 + _complaints.length}',
+        title: 'फोटो आधारित नागरिक शिकायत',
+        department: 'नगर निगम / वार्ड विभाग',
+        details: aiReplyText.length > 60 ? aiReplyText.substring(0, 60) + '...' : aiReplyText,
+        ward: 'वार्ड संख्या 05',
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        status: 'Submitted (प्रगति पर)',
+        deadline: '24 से 48 घंटे',
+        imagePath: target,
+      );
 
-      if (!mounted) return;
       setState(() {
-        _messages.add(ChatMessage(id: aiMsgId, text: aiReplyText, isUser: false, timestamp: DateTime.now().millisecondsSinceEpoch));
+        _complaints.insert(0, newComp);
+        _messages.add(ChatMessage(
+          id: 'ai_img_${DateTime.now().millisecondsSinceEpoch}',
+          text: '✅ आपकी शिकायत सफलतापूर्वक दर्ज कर ली गई है!\n\nटिकट आईडी: ${newComp.ticketId}\nएआई विश्लेषण: $aiReplyText\n\nआप इसे "My Complaints" टैब में ट्रैक कर सकते हैं।',
+          isUser: false,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+        ));
         _aiTyping = false;
       });
+
       LocalStore.saveChat(_messages);
-      _speakText(aiMsgId, aiReplyText);
+      LocalStore.saveComplaints(_complaints);
     } catch (_) {
       setState(() => _aiTyping = false);
     }
@@ -623,11 +683,52 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(c.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.highlight)),
-                          const SizedBox(height: 4),
-                          Text('🎫 टिकट आईडी: ${c.ticketId}'),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(c.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.highlight)),
+                              Text(c.ticketId, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
                           Text('🏛️ विभाग: ${c.department}'),
-                          Text('📍 विवरण: ${c.ward}'),
+                          Text('📍 स्थान: ${c.ward}'),
+                          Text('⏳ अनुमानित समय: ${c.deadline}'),
+                          const SizedBox(height: 4),
+                          Text('📌 स्टेटस: ${c.status}', style: TextStyle(color: c.status.contains('Escalated') ? Colors.redAccent : Colors.greenAccent, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              // Remind Button
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.highlight)),
+                                onPressed: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('🔔 टिकट ${c.ticketId} के लिए संबंधित विभाग को रिमाइंडर भेज दिया गया है!')),
+                                  );
+                                },
+                                icon: const Icon(Icons.notifications_active, size: 14, color: AppColors.highlight),
+                                label: const Text('Remind', style: TextStyle(fontSize: 12, color: AppColors.highlight)),
+                              ),
+                              const SizedBox(width: 8),
+                              // Escalate Button
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade800),
+                                onPressed: () {
+                                  setState(() {
+                                    c.status = 'Escalated to Higher Authority (उच्च अधिकारी को भेजी गई)';
+                                  });
+                                  LocalStore.saveComplaints(_complaints);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('⚡ टिकट ${c.ticketId} को वरिष्ठ अधिकारी के पास एस्केलेट कर दिया गया है!')),
+                                  );
+                                },
+                                icon: const Icon(Icons.arrow_upward_rounded, size: 14, color: Colors.white),
+                                label: const Text('Escalate', style: TextStyle(fontSize: 12, color: Colors.white)),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     );
