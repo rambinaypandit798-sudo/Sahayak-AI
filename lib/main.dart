@@ -1,5 +1,5 @@
 // ============================================================================
-//  Sahayak AI — Final Production Version with Gemini 2.5 Flash Model
+//  Sahayak AI — Final Production Version with Gemini 3.6 Flash Model
 // ============================================================================
 
 import 'dart:async';
@@ -117,8 +117,8 @@ class Complaint {
 }
 
 class LocalStore {
-  static const String _sessionsKey = 'sahayak_chat_sessions_v17';
-  static const String _complaintsKey = 'sahayak_complaints_v17';
+  static const String _sessionsKey = 'sahayak_chat_sessions_v18';
+  static const String _complaintsKey = 'sahayak_complaints_v18';
   static const String _apiKeyStore = 'gemini_user_api_key';
 
   static Future<String?> getSavedApiKey() async {
@@ -197,9 +197,9 @@ class GeminiService {
     }
 
     try {
-      // ⚡ यहाँ Gemini 2.5 Flash मॉडल सेट किया गया है
+      // ⚡ यहाँ गूगल के निर्देशानुसार लेटेस्ट 'gemini-3.6-flash' मॉडल सेट किया गया है[span_2](start_span)[span_2](end_span)
       final model = GenerativeModel(
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         apiKey: apiKey,
         systemInstruction: Content.text(
           "आप 'Sahayak AI' हैं—एक बुद्धिमान नागरिक और छात्र सहायक (Civic & Student Assistant)। "
@@ -786,6 +786,7 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
                         children: [
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            pages: [],
                             children: [
                               Text(c.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.highlight)),
                               Text(c.ticketId, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
