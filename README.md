@@ -25,13 +25,11 @@
       <td align="center" width="50%"><b>Live Complaint Tracking</b></td>
     </tr>
     <tr>
-      <td align="center"><img src="screenshots/chat_screen.png" width="280" alt="Chat Screen"/></td>
-      <td align="center"><img src="screenshots/complaint_screen.png" width="280" alt="Complaints Screen"/></td>
+      <td align="center"><img src="IMG_20260921_082734.jpg" width="280" alt="Chat Screen"/></td>
+      <td align="center"><img src="IMG_20260921_082705.jpg" width="280" alt="Complaints Screen"/></td>
     </tr>
   </table>
 </div>
-
-> *नोट: आप अपने ऐप के स्क्रीनशॉट्स को गिटहब रिपॉजिटरी में `screenshots/` फोल्डर बनाकर अपलोड कर सकते हैं और ऊपर दिए गए पाथ से लिंक कर सकते हैं।*
 
 ---
 
